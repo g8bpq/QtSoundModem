@@ -1,0 +1,11 @@
+cp --preserve  /mnt/Source/QT/QtSoundModem/*.cpp ./
+cp --preserve  /mnt/Source/QT/QtSoundModem/*.c ./
+cp --preserve  /mnt/Source/QT/QtSoundModem/*.h ./
+cp --preserve  /mnt/Source/QT/QtSoundModem/*.ui ./
+cp --preserve  /mnt/Source/QT/QtSoundModem/*.cxx ./
+cp --preserve  /mnt/Source/QT/QtSoundModem/*.pro ./
+cp --preserve  /mnt/Source/QT/QtSoundModem/*.qrc ./
+cp --preserve  /mnt/Source/QT/QtSoundModem/*.ico ./
+qmake
+make -j4
+cp QtSoundModem /mnt/Source

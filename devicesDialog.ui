@@ -1,0 +1,885 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>devicesDialog</class>
+ <widget class="QDialog" name="devicesDialog">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>535</width>
+    <height>698</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Dialog</string>
+  </property>
+  <property name="sizeGripEnabled">
+   <bool>true</bool>
+  </property>
+  <widget class="QScrollArea" name="scrollArea">
+   <property name="geometry">
+    <rect>
+     <x>5</x>
+     <y>10</y>
+     <width>512</width>
+     <height>671</height>
+    </rect>
+   </property>
+   <property name="verticalScrollBarPolicy">
+    <enum>Qt::ScrollBarAsNeeded</enum>
+   </property>
+   <property name="horizontalScrollBarPolicy">
+    <enum>Qt::ScrollBarAsNeeded</enum>
+   </property>
+   <property name="widgetResizable">
+    <bool>false</bool>
+   </property>
+   <widget class="QWidget" name="scrollAreaWidgetContents">
+    <property name="geometry">
+     <rect>
+      <x>0</x>
+      <y>0</y>
+      <width>508</width>
+      <height>668</height>
+     </rect>
+    </property>
+    <widget class="QGroupBox" name="groupBox">
+     <property name="geometry">
+      <rect>
+       <x>5</x>
+       <y>10</y>
+       <width>541</width>
+       <height>331</height>
+      </rect>
+     </property>
+     <property name="title">
+      <string>Sound Card</string>
+     </property>
+     <widget class="QComboBox" name="outputDevice">
+      <property name="geometry">
+       <rect>
+        <x>108</x>
+        <y>25</y>
+        <width>261</width>
+        <height>22</height>
+       </rect>
+      </property>
+      <property name="editable">
+       <bool>true</bool>
+      </property>
+     </widget>
+     <widget class="QComboBox" name="inputDevice">
+      <property name="geometry">
+       <rect>
+        <x>108</x>
+        <y>55</y>
+        <width>261</width>
+        <height>22</height>
+       </rect>
+      </property>
+      <property name="editable">
+       <bool>true</bool>
+      </property>
+     </widget>
+     <widget class="QLabel" name="label">
+      <property name="geometry">
+       <rect>
+        <x>13</x>
+        <y>25</y>
+        <width>91</width>
+        <height>19</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>OutputDevice</string>
+      </property>
+     </widget>
+     <widget class="QLabel" name="label_2">
+      <property name="geometry">
+       <rect>
+        <x>13</x>
+        <y>55</y>
+        <width>71</width>
+        <height>19</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Input Device</string>
+      </property>
+     </widget>
+     <widget class="QCheckBox" name="txRotation">
+      <property name="geometry">
+       <rect>
+        <x>20</x>
+        <y>204</y>
+        <width>101</width>
+        <height>17</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>TX Rotation</string>
+      </property>
+     </widget>
+     <widget class="QCheckBox" name="colourWaterfall">
+      <property name="geometry">
+       <rect>
+        <x>20</x>
+        <y>254</y>
+        <width>231</width>
+        <height>17</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Colour Waterfall</string>
+      </property>
+     </widget>
+     <widget class="QCheckBox" name="stopWFonMinimize">
+      <property name="geometry">
+       <rect>
+        <x>20</x>
+        <y>279</y>
+        <width>251</width>
+        <height>17</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Stop Waterfall on Minimize</string>
+      </property>
+     </widget>
+     <widget class="QCheckBox" name="minimizeonStart">
+      <property name="geometry">
+       <rect>
+        <x>20</x>
+        <y>304</y>
+        <width>251</width>
+        <height>17</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Minimize window on startup</string>
+      </property>
+     </widget>
+     <widget class="QLineEdit" name="txSamplerate">
+      <property name="geometry">
+       <rect>
+        <x>108</x>
+        <y>124</y>
+        <width>63</width>
+        <height>20</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>12000</string>
+      </property>
+     </widget>
+     <widget class="QLineEdit" name="rxSamplerate">
+      <property name="geometry">
+       <rect>
+        <x>304</x>
+        <y>124</y>
+        <width>63</width>
+        <height>20</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>12000</string>
+      </property>
+     </widget>
+     <widget class="QLabel" name="label_6">
+      <property name="geometry">
+       <rect>
+        <x>13</x>
+        <y>125</y>
+        <width>91</width>
+        <height>18</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>TX SampleRate</string>
+      </property>
+     </widget>
+     <widget class="QLabel" name="label_7">
+      <property name="geometry">
+       <rect>
+        <x>190</x>
+        <y>125</y>
+        <width>91</width>
+        <height>18</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>RX SampleRate</string>
+      </property>
+     </widget>
+     <widget class="QComboBox" name="Modem_1_Chan">
+      <property name="geometry">
+       <rect>
+        <x>70</x>
+        <y>164</y>
+        <width>86</width>
+        <height>20</height>
+       </rect>
+      </property>
+      <item>
+       <property name="text">
+        <string>None</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>Left/Mono</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>Right</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string/>
+       </property>
+      </item>
+     </widget>
+     <widget class="QLabel" name="label_12">
+      <property name="geometry">
+       <rect>
+        <x>12</x>
+        <y>166</y>
+        <width>61</width>
+        <height>16</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Modem 1</string>
+      </property>
+     </widget>
+     <widget class="QComboBox" name="Modem_2_Chan">
+      <property name="geometry">
+       <rect>
+        <x>180</x>
+        <y>164</y>
+        <width>86</width>
+        <height>20</height>
+       </rect>
+      </property>
+      <item>
+       <property name="text">
+        <string>None</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>Left/Mono</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>Right</string>
+       </property>
+      </item>
+     </widget>
+     <widget class="QLabel" name="label_13">
+      <property name="geometry">
+       <rect>
+        <x>165</x>
+        <y>166</y>
+        <width>21</width>
+        <height>16</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>2</string>
+      </property>
+     </widget>
+     <widget class="QCheckBox" name="singleChannelOutput">
+      <property name="geometry">
+       <rect>
+        <x>20</x>
+        <y>229</y>
+        <width>221</width>
+        <height>17</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Single Channel Output</string>
+      </property>
+     </widget>
+     <widget class="QCheckBox" name="DualPTT">
+      <property name="geometry">
+       <rect>
+        <x>140</x>
+        <y>201</y>
+        <width>91</width>
+        <height>21</height>
+       </rect>
+      </property>
+      <property name="toolTip">
+       <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Use separate PTT signals for the two Modems. &lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+      </property>
+      <property name="text">
+       <string>Dual PTT</string>
+      </property>
+     </widget>
+     <widget class="QRadioButton" name="ALSA">
+      <property name="geometry">
+       <rect>
+        <x>30</x>
+        <y>90</y>
+        <width>71</width>
+        <height>20</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>ALSA</string>
+      </property>
+     </widget>
+     <widget class="QRadioButton" name="OSS">
+      <property name="geometry">
+       <rect>
+        <x>100</x>
+        <y>90</y>
+        <width>61</width>
+        <height>20</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>OSS</string>
+      </property>
+     </widget>
+     <widget class="QRadioButton" name="PULSE">
+      <property name="geometry">
+       <rect>
+        <x>168</x>
+        <y>90</y>
+        <width>91</width>
+        <height>20</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Pulse Audio</string>
+      </property>
+     </widget>
+     <widget class="QCheckBox" name="multiCore">
+      <property name="geometry">
+       <rect>
+        <x>260</x>
+        <y>205</y>
+        <width>191</width>
+        <height>17</height>
+       </rect>
+      </property>
+      <property name="toolTip">
+       <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Check to run each modem in a separate thread. This may improve performace on multicore processors like the Pi3 and 4 but will reduce performance on a single core procssor&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+      </property>
+      <property name="text">
+       <string>use multiple threads</string>
+      </property>
+     </widget>
+     <widget class="QRadioButton" name="UDP">
+      <property name="geometry">
+       <rect>
+        <x>334</x>
+        <y>90</y>
+        <width>51</width>
+        <height>20</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>UDP   </string>
+      </property>
+     </widget>
+     <widget class="QLineEdit" name="UDPPort">
+      <property name="geometry">
+       <rect>
+        <x>434</x>
+        <y>90</y>
+        <width>41</width>
+        <height>20</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>8888</string>
+      </property>
+     </widget>
+     <widget class="QComboBox" name="Modem_3_Chan">
+      <property name="geometry">
+       <rect>
+        <x>290</x>
+        <y>164</y>
+        <width>86</width>
+        <height>20</height>
+       </rect>
+      </property>
+      <item>
+       <property name="text">
+        <string>None</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>Left/Mono</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>Right</string>
+       </property>
+      </item>
+     </widget>
+     <widget class="QLabel" name="label_14">
+      <property name="geometry">
+       <rect>
+        <x>272</x>
+        <y>166</y>
+        <width>21</width>
+        <height>16</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>3</string>
+      </property>
+     </widget>
+     <widget class="QLabel" name="label_15">
+      <property name="geometry">
+       <rect>
+        <x>385</x>
+        <y>166</y>
+        <width>21</width>
+        <height>16</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>4</string>
+      </property>
+     </widget>
+     <widget class="QComboBox" name="Modem_4_Chan">
+      <property name="geometry">
+       <rect>
+        <x>400</x>
+        <y>164</y>
+        <width>86</width>
+        <height>20</height>
+       </rect>
+      </property>
+      <item>
+       <property name="text">
+        <string>None</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>Left/Mono</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>Right</string>
+       </property>
+      </item>
+     </widget>
+     <widget class="QLabel" name="label_8">
+      <property name="geometry">
+       <rect>
+        <x>384</x>
+        <y>92</y>
+        <width>51</width>
+        <height>16</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Port</string>
+      </property>
+     </widget>
+    </widget>
+    <widget class="QGroupBox" name="groupBox_2">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>360</y>
+       <width>481</width>
+       <height>101</height>
+      </rect>
+     </property>
+     <property name="title">
+      <string>Server Setup</string>
+     </property>
+     <widget class="QLabel" name="label_3">
+      <property name="geometry">
+       <rect>
+        <x>22</x>
+        <y>24</y>
+        <width>121</width>
+        <height>18</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>AGWPE Server Port</string>
+      </property>
+     </widget>
+     <widget class="QLineEdit" name="AGWPort">
+      <property name="geometry">
+       <rect>
+        <x>160</x>
+        <y>24</y>
+        <width>47</width>
+        <height>20</height>
+       </rect>
+      </property>
+     </widget>
+     <widget class="QLineEdit" name="KISSPort">
+      <property name="geometry">
+       <rect>
+        <x>160</x>
+        <y>48</y>
+        <width>47</width>
+        <height>20</height>
+       </rect>
+      </property>
+     </widget>
+     <widget class="QLabel" name="label_4">
+      <property name="geometry">
+       <rect>
+        <x>22</x>
+        <y>48</y>
+        <width>111</width>
+        <height>18</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>KISS Server Port</string>
+      </property>
+     </widget>
+     <widget class="QCheckBox" name="AGWEnabled">
+      <property name="geometry">
+       <rect>
+        <x>230</x>
+        <y>22</y>
+        <width>70</width>
+        <height>25</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Enabled</string>
+      </property>
+     </widget>
+     <widget class="QCheckBox" name="KISSEnabled">
+      <property name="geometry">
+       <rect>
+        <x>230</x>
+        <y>46</y>
+        <width>70</width>
+        <height>23</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Enabled</string>
+      </property>
+     </widget>
+     <widget class="QCheckBox" name="UDPEnabled">
+      <property name="geometry">
+       <rect>
+        <x>380</x>
+        <y>74</y>
+        <width>70</width>
+        <height>23</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Enabled</string>
+      </property>
+     </widget>
+     <widget class="QLineEdit" name="UDPTXHost">
+      <property name="geometry">
+       <rect>
+        <x>160</x>
+        <y>73</y>
+        <width>111</width>
+        <height>20</height>
+       </rect>
+      </property>
+     </widget>
+     <widget class="QLabel" name="label_9">
+      <property name="geometry">
+       <rect>
+        <x>280</x>
+        <y>74</y>
+        <width>31</width>
+        <height>16</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Port</string>
+      </property>
+     </widget>
+     <widget class="QLineEdit" name="UDPTXPort">
+      <property name="geometry">
+       <rect>
+        <x>320</x>
+        <y>74</y>
+        <width>47</width>
+        <height>20</height>
+       </rect>
+      </property>
+     </widget>
+     <widget class="QLabel" name="label_10">
+      <property name="geometry">
+       <rect>
+        <x>20</x>
+        <y>74</y>
+        <width>111</width>
+        <height>18</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>UDP Sound Server Host</string>
+      </property>
+     </widget>
+    </widget>
+    <widget class="QGroupBox" name="groupBox_3">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>470</y>
+       <width>481</width>
+       <height>151</height>
+      </rect>
+     </property>
+     <property name="title">
+      <string>PTT Port</string>
+     </property>
+     <widget class="QComboBox" name="PTTPort">
+      <property name="geometry">
+       <rect>
+        <x>122</x>
+        <y>20</y>
+        <width>81</width>
+        <height>22</height>
+       </rect>
+      </property>
+     </widget>
+     <widget class="QLabel" name="label_5">
+      <property name="geometry">
+       <rect>
+        <x>20</x>
+        <y>22</y>
+        <width>101</width>
+        <height>16</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Select PTT Port</string>
+      </property>
+     </widget>
+     <widget class="QLabel" name="PTTOnLab">
+      <property name="geometry">
+       <rect>
+        <x>20</x>
+        <y>82</y>
+        <width>83</width>
+        <height>16</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>PTT On String</string>
+      </property>
+     </widget>
+     <widget class="QLineEdit" name="PTTOn">
+      <property name="geometry">
+       <rect>
+        <x>122</x>
+        <y>80</y>
+        <width>247</width>
+        <height>20</height>
+       </rect>
+      </property>
+     </widget>
+     <widget class="QLineEdit" name="PTTOff">
+      <property name="geometry">
+       <rect>
+        <x>122</x>
+        <y>112</y>
+        <width>247</width>
+        <height>20</height>
+       </rect>
+      </property>
+     </widget>
+     <widget class="QLabel" name="PTTOffLab">
+      <property name="geometry">
+       <rect>
+        <x>20</x>
+        <y>112</y>
+        <width>83</width>
+        <height>16</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>PTT Off String</string>
+      </property>
+     </widget>
+     <widget class="QLabel" name="GPIOLab">
+      <property name="geometry">
+       <rect>
+        <x>20</x>
+        <y>53</y>
+        <width>83</width>
+        <height>16</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>GPIO Pin Left</string>
+      </property>
+     </widget>
+     <widget class="QLineEdit" name="GPIOLeft">
+      <property name="geometry">
+       <rect>
+        <x>122</x>
+        <y>50</y>
+        <width>25</width>
+        <height>20</height>
+       </rect>
+      </property>
+     </widget>
+     <widget class="QLineEdit" name="GPIORight">
+      <property name="geometry">
+       <rect>
+        <x>262</x>
+        <y>50</y>
+        <width>25</width>
+        <height>20</height>
+       </rect>
+      </property>
+     </widget>
+     <widget class="QLabel" name="GPIOLab2">
+      <property name="geometry">
+       <rect>
+        <x>165</x>
+        <y>50</y>
+        <width>83</width>
+        <height>18</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>GPIO Pin Right</string>
+      </property>
+     </widget>
+     <widget class="QLabel" name="CATLabel">
+      <property name="geometry">
+       <rect>
+        <x>18</x>
+        <y>50</y>
+        <width>83</width>
+        <height>18</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>CAT Port Speed</string>
+      </property>
+     </widget>
+     <widget class="QLineEdit" name="CATSpeed">
+      <property name="geometry">
+       <rect>
+        <x>122</x>
+        <y>50</y>
+        <width>47</width>
+        <height>20</height>
+       </rect>
+      </property>
+     </widget>
+     <widget class="QRadioButton" name="RTSDTR">
+      <property name="geometry">
+       <rect>
+        <x>220</x>
+        <y>22</y>
+        <width>86</width>
+        <height>18</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>RTS/DTR</string>
+      </property>
+     </widget>
+     <widget class="QRadioButton" name="CAT">
+      <property name="geometry">
+       <rect>
+        <x>315</x>
+        <y>22</y>
+        <width>53</width>
+        <height>18</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>CAT</string>
+      </property>
+     </widget>
+     <widget class="QLineEdit" name="VIDPID">
+      <property name="geometry">
+       <rect>
+        <x>120</x>
+        <y>50</y>
+        <width>96</width>
+        <height>20</height>
+       </rect>
+      </property>
+     </widget>
+     <widget class="QLabel" name="CM108Label">
+      <property name="geometry">
+       <rect>
+        <x>20</x>
+        <y>50</y>
+        <width>95</width>
+        <height>18</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>CM108 VID/PID</string>
+      </property>
+     </widget>
+    </widget>
+    <widget class="QWidget" name="layoutWidget">
+     <property name="geometry">
+      <rect>
+       <x>140</x>
+       <y>626</y>
+       <width>215</width>
+       <height>33</height>
+      </rect>
+     </property>
+     <layout class="QHBoxLayout">
+      <property name="spacing">
+       <number>6</number>
+      </property>
+      <property name="leftMargin">
+       <number>0</number>
+      </property>
+      <property name="topMargin">
+       <number>0</number>
+      </property>
+      <property name="rightMargin">
+       <number>0</number>
+      </property>
+      <property name="bottomMargin">
+       <number>0</number>
+      </property>
+      <item>
+       <widget class="QPushButton" name="okButton">
+        <property name="text">
+         <string>OK</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="cancelButton">
+        <property name="text">
+         <string>Cancel</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </widget>
+  </widget>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

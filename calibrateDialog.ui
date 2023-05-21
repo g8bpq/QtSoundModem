@@ -1,0 +1,285 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>calDialog</class>
+ <widget class="QDialog" name="calDialog">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>270</width>
+    <height>411</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Dialog</string>
+  </property>
+  <widget class="QGroupBox" name="groupBoxA">
+   <property name="geometry">
+    <rect>
+     <x>10</x>
+     <y>10</y>
+     <width>120</width>
+     <height>195</height>
+    </rect>
+   </property>
+   <property name="title">
+    <string>Channel A</string>
+   </property>
+   <widget class="QPushButton" name="Low_A">
+    <property name="geometry">
+     <rect>
+      <x>26</x>
+      <y>26</y>
+      <width>75</width>
+      <height>23</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Low Tone</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="High_A">
+    <property name="geometry">
+     <rect>
+      <x>26</x>
+      <y>66</y>
+      <width>75</width>
+      <height>23</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>High Tone</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Both_A">
+    <property name="geometry">
+     <rect>
+      <x>26</x>
+      <y>106</y>
+      <width>75</width>
+      <height>23</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Both Tones</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Stop_A">
+    <property name="geometry">
+     <rect>
+      <x>26</x>
+      <y>146</y>
+      <width>75</width>
+      <height>23</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Stop TX</string>
+    </property>
+   </widget>
+  </widget>
+  <widget class="QGroupBox" name="groupBoxB">
+   <property name="geometry">
+    <rect>
+     <x>140</x>
+     <y>10</y>
+     <width>120</width>
+     <height>195</height>
+    </rect>
+   </property>
+   <property name="title">
+    <string>Channel B</string>
+   </property>
+   <property name="flat">
+    <bool>false</bool>
+   </property>
+   <widget class="QPushButton" name="Low_B">
+    <property name="geometry">
+     <rect>
+      <x>26</x>
+      <y>26</y>
+      <width>75</width>
+      <height>23</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Low Tone</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="High_B">
+    <property name="geometry">
+     <rect>
+      <x>26</x>
+      <y>66</y>
+      <width>75</width>
+      <height>23</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>High Tone</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Both_B">
+    <property name="geometry">
+     <rect>
+      <x>26</x>
+      <y>106</y>
+      <width>75</width>
+      <height>23</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Both Tones</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Stop_B">
+    <property name="geometry">
+     <rect>
+      <x>28</x>
+      <y>146</y>
+      <width>75</width>
+      <height>23</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Stop TX</string>
+    </property>
+   </widget>
+  </widget>
+  <widget class="QGroupBox" name="groupBox">
+   <property name="geometry">
+    <rect>
+     <x>10</x>
+     <y>210</y>
+     <width>120</width>
+     <height>195</height>
+    </rect>
+   </property>
+   <property name="title">
+    <string>Channel C</string>
+   </property>
+   <widget class="QPushButton" name="High_C">
+    <property name="geometry">
+     <rect>
+      <x>26</x>
+      <y>70</y>
+      <width>75</width>
+      <height>23</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>High Tone</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Both_C">
+    <property name="geometry">
+     <rect>
+      <x>26</x>
+      <y>110</y>
+      <width>75</width>
+      <height>23</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Both Tones</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Low_C">
+    <property name="geometry">
+     <rect>
+      <x>26</x>
+      <y>30</y>
+      <width>75</width>
+      <height>23</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Low Tone</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Stop_C">
+    <property name="geometry">
+     <rect>
+      <x>26</x>
+      <y>150</y>
+      <width>75</width>
+      <height>23</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Stop TX</string>
+    </property>
+   </widget>
+  </widget>
+  <widget class="QGroupBox" name="groupBox_2">
+   <property name="geometry">
+    <rect>
+     <x>140</x>
+     <y>210</y>
+     <width>120</width>
+     <height>195</height>
+    </rect>
+   </property>
+   <property name="title">
+    <string>Channel D</string>
+   </property>
+   <widget class="QPushButton" name="High_D">
+    <property name="geometry">
+     <rect>
+      <x>26</x>
+      <y>70</y>
+      <width>75</width>
+      <height>23</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>High Tone</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Both_D">
+    <property name="geometry">
+     <rect>
+      <x>25</x>
+      <y>110</y>
+      <width>75</width>
+      <height>23</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Both Tones</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Low_D">
+    <property name="geometry">
+     <rect>
+      <x>26</x>
+      <y>30</y>
+      <width>75</width>
+      <height>23</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Low Tone</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="Stop_D">
+    <property name="geometry">
+     <rect>
+      <x>26</x>
+      <y>150</y>
+      <width>75</width>
+      <height>23</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Stop TX</string>
+    </property>
+   </widget>
+  </widget>
+ </widget>
+ <resources/>
+ <connections/>
+ <slots>
+  <slot>buttonClick()</slot>
+ </slots>
+</ui>
