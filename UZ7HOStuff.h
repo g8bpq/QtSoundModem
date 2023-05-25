@@ -2,8 +2,8 @@
 //	 My port of UZ7HO's Soundmodem
 //
 
-#define VersionString "0.0.0.64"
-#define VersionBytes {0, 0, 0, 64}
+#define VersionString "0.0.0.65"
+#define VersionBytes {0, 0, 0, 65}
 
 // Added FX25. 4x100 FEC and V27 not Working and disabled
 
@@ -140,6 +140,8 @@
 //	Don't add plug: to Linux device addresses unless addr contains : (allows use of eg ARDOP)
 
 // 0.64 Fix sending ax.25 (broken in .61)
+
+// 0.65	Allow Set Modem command to use modem index as well as modem name
 
 
 

@@ -539,20 +539,33 @@ void on_AGW_Gs_frame(AGWUser * AGW, struct AGWHeader * Frame, Byte * Data)
 
 		if (Data[4])
 		{
-			// New Modem Name. Need to convert to index
+			// New Modem Name. Need to convert to index unless numeric
 
 			int n;
-
-			for (n = 0; n < modes_count; n++)
+			
+			if (strlen(&Data[4]) < 3)
 			{
-				if (strcmp(modes_name[n], &Data[4]) == 0)
+				n = atoi(&Data[4]);
+				if (n < modes_count)
 				{
-					// Found it
-
 					speed[Frame->Port] = n;
 					refreshModems = 1;
-					break;
 				}
+			}
+			else
+			{
+				for (n = 0; n < modes_count; n++)
+				{
+					if (strcmp(modes_name[n], &Data[4]) == 0)
+					{
+						// Found it
+
+						speed[Frame->Port] = n;
+						refreshModems = 1;
+						break;
+					}
+				}
+
 			}
 		}
 
