@@ -27,6 +27,7 @@ along with QtSoundModem.  If not, see http://www.gnu.org/licenses
 #include "hidapi.h"
 #include <fcntl.h>
 #include <errno.h>
+#include <stdint.h>   
 
 BOOL KISSServ;
 int KISSPort;
@@ -39,6 +40,9 @@ int Number = 0;				// Number waiting to be sent
 int SoundIsPlaying = 0;
 int UDPSoundIsPlaying = 0;
 int Capturing = 0;
+
+int txmin = 0;
+int txmax = 0;
 
 extern unsigned short buffer[2][1200];
 extern int SoundMode;
@@ -62,13 +66,24 @@ extern int pnt_change[5];				// Freq Changed Flag
 fftwf_complex *in, *out;
 fftwf_plan p;
 
-#define N 2048
+int FFTSize = 4096;
+
+char * Wisdom;
 
 void initfft()
 {
-	in = (fftwf_complex*)fftwf_malloc(sizeof(fftwf_complex) * N);
-	out = (fftwf_complex*)fftwf_malloc(sizeof(fftwf_complex) * N);
-	p = fftwf_plan_dft_1d(N, in, out, FFTW_FORWARD, FFTW_ESTIMATE);
+	fftwf_import_wisdom_from_string(Wisdom); 
+	fftwf_set_timelimit(30);
+
+#ifndef WIN32
+	printf("It may take up to 30 seconds for the program to start for the first time\n");
+#endif
+
+	in = (fftwf_complex*)fftwf_malloc(sizeof(fftwf_complex) * 10000);
+	out = (fftwf_complex*)fftwf_malloc(sizeof(fftwf_complex) * 10000);
+	p = fftwf_plan_dft_1d(FFTSize, in, out, FFTW_FORWARD, FFTW_PATIENT);
+
+	Wisdom = fftwf_export_wisdom_to_string();
 }
 
 void dofft(short * inp, float * outr, float * outi)
@@ -77,7 +92,7 @@ void dofft(short * inp, float * outr, float * outi)
 	
 	fftwf_complex * fft = in;
 
-	for (i = 0; i < N; i++)
+	for (i = 0; i < FFTSize; i++)
 	{
 		fft[0][0] = inp[0] * 1.0f;
 		fft[0][1] = 0;
@@ -89,7 +104,7 @@ void dofft(short * inp, float * outr, float * outi)
 
 	fft = out;
 
-	for (i = 0; i < N; i++)
+	for (i = 0; i < FFTSize; i++)
 	{
 		outr[0] = fft[0][0];
 		outi[0] = fft[0][1];
@@ -164,6 +179,18 @@ void SampleSink(int LR, short Sample)
 			DMABuffer[2 * Number] = Sample;
 			DMABuffer[1 + 2 * Number] = 0;
 		}
+	}
+	if (using48000)
+	{
+		// Need to upsample to 48K. Try just duplicating sample
+
+		uint32_t * ptr = &DMABuffer[2 * Number];
+
+		*(&ptr[1]) = *(ptr);
+		*(&ptr[2]) = *(ptr);
+		*(&ptr[3]) = *(ptr);
+
+		Number += 3;
 	}
 	Number++;
 #endif
@@ -321,194 +348,171 @@ extern UCHAR * pixelPointer;
 #endif
 
 extern int blnBusyStatus;
-BusyDet = 0;
+BusyDet = 5;
 
 #define PLOTWATERFALL
 
 int WaterfallActive = 1;
 int SpectrumActive;
 
-/*
+float BinSize;
 
-void UpdateBusyDetector(short * bytNewSamples)
+extern int intLastStart;
+extern int intLastStop;
+
+void SMSortSignals2(float * dblMag, int intStartBin, int intStopBin, int intNumBins, float *  dblAVGSignalPerBin, float *  dblAVGBaselinePerBin);
+
+
+BOOL SMBusyDetect3(float * dblMag, int intStart, int intStop)        // this only called while searching for leader ...once leader detected, no longer called.
 {
-	float dblReF[1024];
-	float dblImF[1024];
-	float dblMag[206];
-#ifdef PLOTSPECTRUM
-	float dblMagMax = 0.0000000001f;
-	float dblMagMin = 10000000000.0f;
-#endif
-	UCHAR Waterfall[256];			// Colour index values to send to GUI
-	int clrTLC = Lime;				// Default Bandwidth lines on waterfall
+	// First sort signals and look at highes signals:baseline ratio..
 
-	static BOOL blnLastBusyStatus;
+	float dblAVGSignalPerBinNarrow, dblAVGSignalPerBinWide, dblAVGBaselineNarrow, dblAVGBaselineWide;
+	float dblSlowAlpha = 0.2f;
+	float dblAvgStoNNarrow = 0, dblAvgStoNWide = 0;
+	int intNarrow = 8;  // 8 x 11.72 Hz about 94 z
+	int intWide = ((intStop - intStart) * 2) / 3; //* 0.66);
+	int blnBusy = FALSE;
+	int  BusyDet4th = BusyDet * BusyDet * BusyDet * BusyDet;
+
+	// First sort signals and look at highest signals:baseline ratio..
+	// First narrow band (~94Hz)
+
+	SMSortSignals2(dblMag, intStart, intStop, intNarrow, &dblAVGSignalPerBinNarrow, &dblAVGBaselineNarrow);
+
+	if (intLastStart == intStart && intLastStop == intStop)
+		dblAvgStoNNarrow = (1 - dblSlowAlpha) * dblAvgStoNNarrow + dblSlowAlpha * dblAVGSignalPerBinNarrow / dblAVGBaselineNarrow;
+	else
+	{
+		// This initializes the Narrow average after a bandwidth change
+
+		dblAvgStoNNarrow = dblAVGSignalPerBinNarrow / dblAVGBaselineNarrow;
+		intLastStart = intStart;
+		intLastStop = intStop;
+	}
+
+	// Wide band (66% of current bandwidth)
+
+	SMSortSignals2(dblMag, intStart, intStop, intWide, &dblAVGSignalPerBinWide, &dblAVGBaselineWide);
+
+	if (intLastStart == intStart && intLastStop == intStop)
+		dblAvgStoNWide = (1 - dblSlowAlpha) * dblAvgStoNWide + dblSlowAlpha * dblAVGSignalPerBinWide / dblAVGBaselineWide;
+	else
+	{
+		// This initializes the Wide average after a bandwidth change
+
+		dblAvgStoNWide = dblAVGSignalPerBinWide / dblAVGBaselineWide;
+		intLastStart = intStart;
+		intLastStop = intStop;
+	}
+
+	// Preliminary calibration...future a function of bandwidth and BusyDet.
+
+
+	blnBusy = (dblAvgStoNNarrow > (3 + 0.008 * BusyDet4th)) || (dblAvgStoNWide > (5 + 0.02 * BusyDet4th));
+
+//	if (BusyDet == 0)
+//		blnBusy = FALSE;		// 0 Disables check ?? Is this the best place to do this?
+
+//	WriteDebugLog(LOGDEBUG, "Busy %d Wide %f Narrow %f", blnBusy, dblAvgStoNWide, dblAvgStoNNarrow); 
+
+	return blnBusy;
+}
+
+extern int compare(const void *p1, const void *p2);
+
+void SMSortSignals2(float * dblMag, int intStartBin, int intStopBin, int intNumBins, float *  dblAVGSignalPerBin, float *  dblAVGBaselinePerBin)
+{
+	// puts the top intNumber of bins between intStartBin and intStopBin into dblAVGSignalPerBin, the rest into dblAvgBaselinePerBin
+	// for decent accuracy intNumBins should be < 75% of intStopBin-intStartBin)
+
+	// This version uses a native sort function which is much faster and reduces CPU loading significantly on wide bandwidths. 
+
+	float dblSort[8192];
+	float dblSum1 = 0, dblSum2 = 0;
+	int numtoSort = (intStopBin - intStartBin) + 1, i;
+
+	memcpy(dblSort, &dblMag[intStartBin], numtoSort * sizeof(float));
+
+	qsort((void *)dblSort, numtoSort, sizeof(float), compare);
+
+	for (i = numtoSort - 1; i >= 0; i--)
+	{
+		if (i >= (numtoSort - intNumBins))
+			dblSum1 += dblSort[i];
+		else
+			dblSum2 += dblSort[i];
+	}
+
+	*dblAVGSignalPerBin = dblSum1 / intNumBins;
+	*dblAVGBaselinePerBin = dblSum2 / (intStopBin - intStartBin - intNumBins - 1);
+}
+
+
+
+void SMUpdateBusyDetector(int LR, float * Real, float *Imag)
+{
+	// Energy based detector for each channel.
+	// Fed from FFT generated for waterfall display
+	// FFT size is 4096
+
+	float dblMag[4096];
+
+	static BOOL blnLastBusyStatus[4];
 
 	float dblMagAvg = 0;
 	int intTuneLineLow, intTuneLineHi, intDelta;
-	int i;
+	int i, chan;
 
-	//	if (State != SearchingForLeader)
-	//		return;						// only when looking for leader
+	return;
 
-	if (Now - LastBusyCheck < 100)
+	if (Now - LastBusyCheck < 100)	// ??
 		return;
 
 	LastBusyCheck = Now;
 
-	FourierTransform(1024, bytNewSamples, &dblReF[0], &dblImF[0], FALSE);
+	// We need to run busy test on the frequncies used by each modem.
 
-	for (i = 0; i < 206; i++)
+	for (chan = 0; chan < 4; chan++)
 	{
-		//	starting at ~300 Hz to ~2700 Hz Which puts the center of the signal in the center of the window (~1500Hz)
+		int Low, High, Start, End;
 
-		dblMag[i] = powf(dblReF[i + 25], 2) + powf(dblImF[i + 25], 2);	 // first pass 
-		dblMagAvg += dblMag[i];
-#ifdef PLOTSPECTRUM		
-		dblMagSpectrum[i] = 0.2f * dblMag[i] + 0.8f * dblMagSpectrum[i];
-		dblMagMax = max(dblMagMax, dblMagSpectrum[i]);
-		dblMagMin = min(dblMagMin, dblMagSpectrum[i]);
-#endif
-	}
+		if (soundChannel[chan] != (LR + 1))	// on this side of soundcard 
+			continue;
 
-	//	LookforPacket(dblMag, dblMagAvg, 206, &dblReF[25], &dblImF[25]);
-	//	packet_process_samples(bytNewSamples, 1200);
+		Low = tx_freq[chan] - txbpf[chan] / 2;
+		High = tx_freq[chan] + txbpf[chan] / 2;
 
-	intDelta = roundf(500 / 2) + 50 / 11.719f;
+		// BinSize is width of each fft bin in Hz
 
-	intTuneLineLow = max((103 - intDelta), 3);
-	intTuneLineHi = min((103 + intDelta), 203);
+		Start = (Low / BinSize);		// First and last bins to process
+		End = (High / BinSize);
 
-//	if (ProtocolState == DISC)		// ' Only process busy when in DISC state
-	{
-	//	blnBusyStatus = BusyDetect3(dblMag, intTuneLineLow, intTuneLineHi);
 
-		if (blnBusyStatus && !blnLastBusyStatus)
+		for (i = Start; i < End; i++)
 		{
-//			QueueCommandToHost("BUSY TRUE");
-//			newStatus = TRUE;				// report to PTC
-
-			if (!WaterfallActive && !SpectrumActive)
-			{
-				UCHAR Msg[2];
-
-//				Msg[0] = blnBusyStatus;
-//				SendtoGUI('B', Msg, 1);
-			}
+			dblMag[i] = powf(Real[i], 2) + powf(Imag[i], 2);	 // first pass
+			dblMagAvg += dblMag[i];
 		}
-		//    stcStatus.Text = "TRUE"
-			//    queTNCStatus.Enqueue(stcStatus)
-			//    'Debug.WriteLine("BUSY TRUE @ " & Format(DateTime.UtcNow, "HH:mm:ss"))
 
-		else if (blnLastBusyStatus && !blnBusyStatus)
+		blnBusyStatus = SMBusyDetect3(dblMag, Start, End);
+
+		if (blnBusyStatus && !blnLastBusyStatus[chan])
 		{
-//			QueueCommandToHost("BUSY FALSE");
-//			newStatus = TRUE;				// report to PTC
-
-			if (!WaterfallActive && !SpectrumActive)
-			{
-				UCHAR Msg[2];
-
-				Msg[0] = blnBusyStatus;
-//				SendtoGUI('B', Msg, 1);
-			}
+			Debugprintf("Ch %d Busy True", chan);
+		}
+		else if (blnLastBusyStatus[chan] && !blnBusyStatus)
+		{
+			Debugprintf("Ch %d Busy False", chan);
 		}
 		//    stcStatus.Text = "FALSE"
 		//    queTNCStatus.Enqueue(stcStatus)
 		//    'Debug.WriteLine("BUSY FALSE @ " & Format(DateTime.UtcNow, "HH:mm:ss"))
 
-		blnLastBusyStatus = blnBusyStatus;
-	}
-
-	if (BusyDet == 0)
-		clrTLC = Goldenrod;
-	else if (blnBusyStatus)
-		clrTLC = Fuchsia;
-
-	// At the moment we only get here what seaching for leader,
-	// but if we want to plot spectrum we should call
-	// it always
-
-
-
-	if (WaterfallActive)
-	{
-#ifdef PLOTWATERFALL
-		dblMagAvg = log10f(dblMagAvg / 5000.0f);
-
-		for (i = 0; i < 206; i++)
-		{
-			// The following provides some AGC over the waterfall to compensate for avg input level.
-
-			float y1 = (0.25f + 2.5f / dblMagAvg) * log10f(0.01 + dblMag[i]);
-			int objColor;
-
-			// Set the pixel color based on the intensity (log) of the spectral line
-			if (y1 > 6.5)
-				objColor = Orange; // Strongest spectral line 
-			else if (y1 > 6)
-				objColor = Khaki;
-			else if (y1 > 5.5)
-				objColor = Cyan;
-			else if (y1 > 5)
-				objColor = DeepSkyBlue;
-			else if (y1 > 4.5)
-				objColor = RoyalBlue;
-			else if (y1 > 4)
-				objColor = Navy;
-			else
-				objColor = Black;
-
-			if (i == 102)
-				Waterfall[i] = Tomato;  // 1500 Hz line (center)
-			else if (i == intTuneLineLow || i == intTuneLineLow - 1 || i == intTuneLineHi || i == intTuneLineHi + 1)
-				Waterfall[i] = clrTLC;
-			else
-				Waterfall[i] = objColor; // ' Else plot the pixel as received
-		}
-
-		// Send Signal level and Busy indicator to save extra packets
-
-		Waterfall[206] = CurrentLevel;
-		Waterfall[207] = blnBusyStatus;
-
-		doWaterfall(Waterfall);
-#endif
-	}
-	else if (SpectrumActive)
-	{
-#ifdef PLOTSPECTRUM
-		// This performs an auto scaling mechansim with fast attack and slow release
-		if (dblMagMin / dblMagMax < 0.0001) // more than 10000:1 difference Max:Min
-			dblMaxScale = max(dblMagMax, dblMaxScale * 0.9f);
-		else
-			dblMaxScale = max(10000 * dblMagMin, dblMagMax);
-
-//		clearDisplay();
-
-		for (i = 0; i < 206; i++)
-		{
-			// The following provides some AGC over the spectrum to compensate for avg input level.
-
-			float y1 = -0.25f * (SpectrumHeight - 1) *  log10f((max(dblMagSpectrum[i], dblMaxScale / 10000)) / dblMaxScale); // ' range should be 0 to bmpSpectrumHeight -1
-			int objColor = Yellow;
-
-			Waterfall[i] = round(y1);
-		}
-
-		// Send Signal level and Busy indicator to save extra packets
-
-		Waterfall[206] = CurrentLevel;
-		Waterfall[207] = blnBusyStatus;
-		Waterfall[208] = intTuneLineLow;
-		Waterfall[209] = intTuneLineHi;
-
-//		SendtoGUI('X', Waterfall, 210);
-#endif
+		blnLastBusyStatus[chan] = blnBusyStatus;
 	}
 }
 
-*/
 
 extern short rawSamples[2400];	// Get Frame Type need 2400 and we may add 1200
 int rawSamplesLength = 0;
@@ -543,8 +547,11 @@ int Freq_Change(int Chan, int Freq)
 {
 	int low, high;
 
-	low = round(rx_shift[1] / 2 + RCVR[Chan] * rcvr_offset[Chan] + 1);
+	low = round(rx_shift[Chan] / 2 + (RCVR[Chan] * rcvr_offset[Chan]));
 	high = round(RX_Samplerate / 2 - (rx_shift[Chan] / 2 + RCVR[Chan] * rcvr_offset[Chan]));
+
+	if (Freq < 300)
+		return rx_freq[Chan];				// Dont allow change
 
 	if (Freq < low)
 		return rx_freq[Chan];				// Dont allow change
@@ -600,6 +607,7 @@ int ARDOPSendToCard(int Chan, int Len)
 {
 	// Send Next Block of samples to the soundcard
 
+
 	short * in = &ARDOPTXBuffer[Chan][ARDOPTXPtr[Chan]];		// Enough to hold whole frame of samples
 	short * out = DMABuffer;
 
@@ -628,6 +636,7 @@ int ARDOPSendToCard(int Chan, int Len)
 			}
 		}
 	}
+
 	DMABuffer = SendtoCard(DMABuffer, Len);
 
 	ARDOPTXPtr[Chan] += Len;
@@ -668,7 +677,9 @@ void DoTX(int Chan)
 	{
 		Flush();
 		Debugprintf("TX Complete");
-		RadioPTT(0, 0);
+		RadioPTT(Chan, 0);
+		Continuation[Chan] = 0;
+
 		tx_status[Chan] = TX_SILENCE;
 
 		// We should now send any ackmode acks as the channel is now free for dest to reply
@@ -680,7 +691,7 @@ void DoTX(int Chan)
 	{
 		// Continue the send
 
-		if (modem_mode[Chan] == MODE_ARDOP)
+		if (modem_mode[Chan] == MODE_ARDOP || modem_mode[Chan] == MODE_RUH)
 		{
 //			if (SeeIfCardBusy())
 //				return 0;
@@ -698,6 +709,8 @@ void DoTX(int Chan)
 				{
 					SoundIsPlaying = TRUE;
 					Number = 0;
+
+					Continuation[Chan] = 1;
 
 					Debugprintf("TX Continuing");
 
@@ -728,11 +741,16 @@ void DoTX(int Chan)
 
 					put_frame(Chan, tx_data, "", TRUE, FALSE);
 
-					PktARDOPEncode(tx_data->Data, tx_data->Length - 2, Chan);
+					if (modem_mode[Chan] == MODE_ARDOP)
+						PktARDOPEncode(tx_data->Data, tx_data->Length - 2, Chan);
+					else
+						RUHEncode(tx_data->Data, tx_data->Length - 2, Chan);
 
 					freeString(tx_data);
 
 					// Samples are now in DMABuffer = Send first block
+
+					DMABuffer = SoundInit();
 
 					ARDOPSendToCard(Chan, SendSize);
 					tx_status[Chan] = TX_FRAME;
@@ -740,7 +758,9 @@ void DoTX(int Chan)
 				}
 
 				Debugprintf("TX Complete");
-				RadioPTT(0, 0);
+				RadioPTT(Chan, 0);
+				Continuation[Chan] = 0;
+
 				tx_status[Chan] = TX_SILENCE;
 
 				// We should now send any ackmode acks as the channel is now free for dest to reply
@@ -846,20 +866,54 @@ void DoTX(int Chan)
 		tx_status[Chan] = TX_FRAME;
 
 	}
+	else if (modem_mode[Chan] == MODE_RUH)
+	{
+		// Same as for ARDOP. Generate a whole frame of samples 
+		// then send them out a bit at a time to avoid stopping here
+
+		// We allow two RUH modems
+
+		string * myTemp = Strings(&all_frame_buf[Chan], 0);			// get message
+		string * tx_data;
+
+		if ((myTemp->Data[0] & 0x0f) == 12)			// ACKMODE
+		{
+			// Save copy then copy data up 3 bytes
+
+			Add(&KISS_acked[Chan], duplicateString(myTemp));
+
+			mydelete(myTemp, 0, 3);
+			myTemp->Length -= sizeof(void *);
+		}
+		else
+		{
+			// Just remove control 
+
+			mydelete(myTemp, 0, 1);
+		}
+
+		tx_data = duplicateString(myTemp);		// so can free original below
+
+		Delete(&all_frame_buf[Chan], 0);			// This will invalidate temp
+
+		AGW_AX25_frame_analiz(Chan, FALSE, tx_data);
+
+		put_frame(Chan, tx_data, "", TRUE, FALSE);
+
+		RUHEncode(tx_data->Data, tx_data->Length - 2, Chan);
+
+		freeString(tx_data);
+
+		// Samples are now in DMABuffer = Send first block
+
+		ARDOPSendToCard(Chan, SendSize);
+		tx_status[Chan] = TX_FRAME;
+
+	}
 	else
 		modulator(Chan, tx_bufsize);
 
 	return;
-}
-
-void stoptx(int snd_ch)
-{
-	Flush();
-	Debugprintf("TX Complete");
-	RadioPTT(snd_ch, 0);
-	tx_status[snd_ch] = TX_SILENCE;
-
-	snd_status[snd_ch] = SND_IDLE;
 }
 
 void RX2TX(int snd_ch)
@@ -1142,10 +1196,24 @@ void CM108_set_ptt(int PTTState)
 
 }
 
-
+float amplitudes[4] = { 32767, 32767, 32767, 32767 };
+extern float amplitude;
 
 void RadioPTT(int snd_ch, BOOL PTTState)
 {
+	snd_status[snd_ch] = PTTState; // SND_IDLE = 0 SND_TX = 1 
+
+	if (PTTState)
+	{
+		txmax = txmin = 0;
+		amplitude = amplitudes[snd_ch];
+	}
+	else
+	{
+		Debugprintf("Output peaks = %d, %d, amp %f", txmin, txmax, amplitude);
+		amplitudes[snd_ch] = amplitude;
+	}
+
 #ifdef __ARM_ARCH
 	if (useGPIO)
 	{

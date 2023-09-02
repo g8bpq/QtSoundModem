@@ -93,6 +93,22 @@ extern BOOL UseKISS;			// Enable Packet (KISS) interface
 
 extern short * DMABuffer;
 
+#define MaxReceiveSize 2048		// Enough for 9600
+#define MaxSendSize 4096
+
+short buffer[2][MaxSendSize * 2];		// Two Transfer/DMA buffers of 0.1 Sec  (x2 for Stereo)
+short inbuffer[MaxReceiveSize * 2];	// Input Transfer/ buffers of 0.1 Sec (x2 for Stereo)
+
+
+extern short * DMABuffer;
+extern int Number;
+
+int ReceiveSize = 512;
+int SendSize = 1024;
+int using48000 = 0;
+
+int SampleRate = 12000;
+
 
 BOOL UseLeft = TRUE;
 BOOL UseRight = TRUE;
@@ -123,8 +139,6 @@ void Sleep(int mS)
 // Windows and ALSA work with signed samples +- 32767
 // STM32 and Teensy DAC uses unsigned 0 - 4095
 
-short buffer[2][1200 * 2];			// Two Transfer/DMA buffers of 0.1 Sec
-short inbuffer[1200 * 2];		// Two Transfer/DMA buffers of 0.1 Sec
 
 BOOL Loopback = FALSE;
 //BOOL Loopback = TRUE;
@@ -967,7 +981,7 @@ int SoundCardWrite(short * input, int nSamples)
 
 //	Debugprintf("Tosend %d Avail %d", nSamples, (int)avail);
 
-	while (avail < nSamples || (MaxAvail - avail) > 12000)				// Limit to 1 sec of audio
+	while (avail < nSamples || (MaxAvail - avail) > SampleRate)				// Limit to 1 sec of audio
 	{
 		txSleep(10);
 		avail = snd_pcm_avail_update(playhandle);
@@ -1203,14 +1217,28 @@ void GetSoundDevices()
 
 int InitSound(BOOL Quiet)
 {
+	if (using48000)
+	{
+		ReceiveSize = 2048;
+		SendSize = 4096;		// 100 mS for now
+		SampleRate = 48000;
+	}
+	else
+	{
+		ReceiveSize = 512;
+		SendSize = 1024;
+		SampleRate = 12000;
+	}
+
 	GetSoundDevices();
 
 	switch (SoundMode)
 	{
 	case 0:				// ALSA
 
-		if (!OpenSoundCard(CaptureDevice, PlaybackDevice, 12000, 12000, Quiet))
+		if (!OpenSoundCard(CaptureDevice, PlaybackDevice, SampleRate, SampleRate, Quiet))
 			return FALSE;
+
 
 		break;
 

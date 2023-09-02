@@ -54,11 +54,18 @@ void GetSoundDevices();
 
 // Currently use 1200 samples for TX but 480 for RX to reduce latency
 
-short buffer[2][SendSize * 2];		// Two Transfer/DMA buffers of 0.1 Sec  (x2 for Stereo)
-short inbuffer[5][ReceiveSize * 2];	// Input Transfer/ buffers of 0.1 Sec (x2 for Stereo)
+#define MaxReceiveSize 2048		// Enough for 9600
+#define MaxSendSize 4096
+
+short buffer[2][MaxSendSize * 2];		// Two Transfer/DMA buffers of 0.1 Sec  (x2 for Stereo)
+short inbuffer[5][MaxReceiveSize * 2];	// Input Transfer/ buffers of 0.1 Sec (x2 for Stereo)
 
 extern short * DMABuffer;
 extern int Number;
+
+int ReceiveSize = 512;
+int SendSize = 1024;
+int using48000 = 0;
 
 int SoundMode = 0;
 int stdinMode = 0;
@@ -248,7 +255,7 @@ short * SendtoCard(unsigned short * buf, int n)
 
 	while (!(header[!Index].dwFlags & WHDR_DONE))
 	{
-		txSleep(10);				// Run buckground while waiting 
+		txSleep(5);				// Run buckground while waiting 
 	}
 
 	waveOutUnprepareHeader(hWaveOut, &header[!Index], sizeof(WAVEHDR));
@@ -404,6 +411,21 @@ int InitSound(BOOL Report)
 		}
 	}
 
+	if (using48000)
+	{
+		wfx.nSamplesPerSec = 48000;
+		wfx.nAvgBytesPerSec = 48000 * 4;
+		ReceiveSize = 2048;
+		SendSize = 4096;		// 100 mS for now
+	}
+	else
+	{
+		wfx.nSamplesPerSec = 12000;
+		wfx.nAvgBytesPerSec = 12000 * 4;
+		ReceiveSize = 512;
+		SendSize = 1024;
+	}
+
     ret = waveOutOpen(&hWaveOut, PlayBackIndex, &wfx, 0, 0, CALLBACK_NULL); //WAVE_MAPPER
 
 	if (ret)
@@ -507,7 +529,7 @@ void PollReceivedSamples()
 		return;
 	}
 
-	if (inheader[inIndex].dwFlags & WHDR_DONE)
+	while (inheader[inIndex].dwFlags & WHDR_DONE)
 	{
 		short * ptr = &inbuffer[inIndex][0];
 		int i;
@@ -656,6 +678,7 @@ VOID WriteSamples(short * buffer, int len)
 short * SoundInit()
 {
 	Index = 0;
+	inIndex = 0;
 	return &buffer[0][0];
 
 

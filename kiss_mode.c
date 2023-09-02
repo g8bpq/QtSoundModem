@@ -473,7 +473,7 @@ void sendAckModeAcks(int snd_ch)
 
 		// Socket to reply to is on end
 
-		Msg += (temp->Length - 4);
+		Msg += (temp->Length - sizeof(void *));
 
 		memcpy(&socket, Msg, sizeof(void *));
 

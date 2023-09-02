@@ -322,7 +322,7 @@ VOID Track1Car4FSK(short * intSamples, int * intPtr, int intSampPerSymbol, float
 VOID Decode1CarPSK(int Carrier, BOOL OFDM);
 int EnvelopeCorrelator();
 int EnvelopeCorrelatorNew();
-BOOL DecodeFrame(int intFrameType, UCHAR * bytData);
+BOOL DecodeFrame(int chan, int intFrameType, UCHAR * bytData);
 
 void Update4FSKConstellation(int * intToneMags, int * intQuality);
 void Update16FSKConstellation(int * intToneMags, int * intQuality);
@@ -864,7 +864,7 @@ float dblFreqBin[MAXCAR];
 
 BOOL CheckFrameTypeParity(int intTonePtr, int * intToneMags);
 
-void ARDOPProcessNewSamples(short * Samples, int nSamples)
+void ARDOPProcessNewSamples(int chan, short * Samples, int nSamples)
 {
 	BOOL blnFrameDecodedOK = FALSE;
 
@@ -1264,7 +1264,7 @@ else if (intPhaseError > 2)
 		// This mechanism is to skip actual decoding and reply/change state...no need to decode 
 
      
-		blnFrameDecodedOK = DecodeFrame(intFrameType, bytData);
+		blnFrameDecodedOK = DecodeFrame(chan, intFrameType, bytData);
 
 ProcessFrame:	
 
@@ -3047,7 +3047,7 @@ void DemodulateFrame(int intFrameType)
 int intSNdB = 0, intQuality = 0;
 
 
-BOOL DecodeFrame(int xxx, UCHAR * bytData)
+BOOL DecodeFrame(int chan, int xxx, UCHAR * bytData)
 {
 	BOOL blnDecodeOK = FALSE;
 	char strCallerCallsign[10] = "";
@@ -3176,7 +3176,7 @@ BOOL DecodeFrame(int xxx, UCHAR * bytData)
 
 			// Data in bytData  len in frameLen
 
-			ProcessPktFrame(0, bytData, frameLen);
+			ProcessPktFrame(chan, bytData, frameLen);
 //				else
 //			L2Routine(bytData, frameLen, intLastRcvdFrameQuality, totalRSErrors, intNumCar, pktRXMode);
 

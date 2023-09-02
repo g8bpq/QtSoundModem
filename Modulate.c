@@ -5,7 +5,9 @@
 
 #define ARDOPBufferSize 12000 * 100
 
-extern short ARDOPTXBuffer[4][12000 * 100];	// Enough to hold whole frame of samples
+extern char CWIDMark[32];
+
+extern short ARDOPTXBuffer[4][ARDOPBufferSize];	// Enough to hold whole frame of samples
 
 extern int ARDOPTXLen[4];				// Length of frame
 extern int ARDOPTXPtr[4];				// Tx Pointer
@@ -966,7 +968,7 @@ void sendCWID(char * strID, BOOL CWOnOff, int Chan)
            0x557, 0x155, 0x755, 0x1DD5, 0x7775, 0x1DDDD, 0x1D57, 0x1D57};
 
 
-	float dblHiPhaseInc = 2 * M_PI * 1609.375f / 12000; // 1609.375 Hz High tone
+	float dblHiPhaseInc = 2 * M_PI * 1509.375f / 12000; // 1609.375 Hz High tone
 	float dblLoPhaseInc = 2 * M_PI * 1390.625f / 12000; // 1390.625  low tone
 	float dblHiPhase = 0;
  	float dblLoPhase = 0;
@@ -978,6 +980,23 @@ void sendCWID(char * strID, BOOL CWOnOff, int Chan)
 	char * index;
 	int intMask;
 	int idoffset;
+	int Filter = 1500;
+
+	if (CWIDMark[0])
+	{
+		// Want  nonstandard tones
+
+		float Mark = atof(CWIDMark);
+		float Space = Mark - 200;
+
+		dblHiPhaseInc = 2 * M_PI * Mark / 12000; // 1609.375 Hz High tone
+		dblLoPhaseInc = 2 * M_PI * Space / 12000; // 1390.625  low tone
+
+		if (CWOnOff)
+			Filter = Mark;
+		else
+			Filter = (Mark + Space) / 2;
+	}
 
     strlop(strID, '-');		// Remove any SSID    
 
@@ -1000,8 +1019,12 @@ void sendCWID(char * strID, BOOL CWOnOff, int Chan)
 			dblLoPhase -= 2 * M_PI;
 	}
 	
-	initFilter(500,1500, Chan);
-   
+	if (CWOnOff)
+		initFilter(500, Filter, Chan);
+	else
+		initFilter(200, Filter, Chan);
+
+
 	//Generate leader for VOX 6 dots long
 
 	for (k = 6; k >0; k--)

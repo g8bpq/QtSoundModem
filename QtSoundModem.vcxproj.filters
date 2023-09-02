@@ -137,6 +137,9 @@
     <ClCompile Include="il2p.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="dw9600.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <QtMoc Include="QtSoundModem.h">
@@ -151,9 +154,6 @@
   </ItemGroup>
   <ItemGroup>
     <CustomBuild Include="debug\moc_predefs.h.cbt">
-      <Filter>Generated Files</Filter>
-    </CustomBuild>
-    <CustomBuild Include="release\moc_predefs.h.cbt">
       <Filter>Generated Files</Filter>
     </CustomBuild>
   </ItemGroup>

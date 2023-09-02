@@ -48,7 +48,7 @@ extern int PacketMonLength;
 
 #define ARDOPBufferSize 12000 * 100
 
-short ARDOPTXBuffer[4][12000 * 100];		// Enough to hold whole frame of samples
+short ARDOPTXBuffer[4][ARDOPBufferSize];		// Enough to hold whole frame of samples
 
 int ARDOPTXLen[4] = { 0,0,0,0 };			// Length of frame
 int ARDOPTXPtr[4] = { 0,0,0,0 };			// Tx Pointer

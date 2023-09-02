@@ -1,9 +1,11 @@
+#pragma once
+
 //
 //	 My port of UZ7HO's Soundmodem
 //
 
-#define VersionString "0.0.0.65"
-#define VersionBytes {0, 0, 0, 65}
+#define VersionString "0.0.0.67-2"
+#define VersionBytes {0, 0, 0, 67}
 
 // Added FX25. 4x100 FEC and V27 not Working and disabled
 
@@ -143,6 +145,21 @@
 
 // 0.65	Allow Set Modem command to use modem index as well as modem name
 
+// 0.66 Allow configuration of waterfall span	June 23
+//		Add Exclude
+
+// .67 Add extra modes 8PSK 900 RUH 4800 RUH 9600 QPSK 600 QPSK 2400	August 23
+//	   Fix loading txtail
+//	   Fix digipeating
+//	   Add MaxFrame to Modem Dialog
+//	   Fix 64 bit compatibility in ackmode
+//	   Add option to change CWID tones
+//	   Fix minimum centre freq validation
+
+// .68 Monitor XID and TEST
+//	   Flag active interface in title bar
+//	   Improve header validation in il2p
+
 
 
 #include <string.h>
@@ -214,6 +231,9 @@ typedef unsigned long ULONG;
 #define decodedMEM	  2 //'#'
 #define decodedSingle 1 //'$'
 
+
+// Think about implications of changing this !!
+extern int FFTSize;
 
 // Seems to use Delphi TStringList for a lot of queues. This seems to be a list of pointers and a count
 // Each pointer is to a Data/Length pair
@@ -394,7 +414,6 @@ typedef struct TDetector_t
 	Byte rx_decoded;
 	Byte errors;
 
-
 } TDetector;
 
 
@@ -508,6 +527,10 @@ typedef struct TAX25Port_t
 #define 	U_UA 99
 #define 	U_FRMR 135
 #define 	U_UI 3
+
+#define		U_XID 0xAF
+#define		U_TEST 0xE3
+
 	// PID flags
 #define 	PID_X25 0x01       // 00000001-CCIT X25 PLP
 #define 	PID_SEGMENT 0x08   // 00001000-Segmentation fragment
@@ -520,10 +543,11 @@ typedef struct TAX25Port_t
 #define 	PID_NET_ROM 0xCF   // 11001111-NET/ROM
 
 
-//	Sound interface buffer size
+//	Sound interface buffer sizes
 
-#define SendSize 1024		// 100 mS for now
-#define ReceiveSize 512	// try 100 mS for now
+extern int ReceiveSize;
+extern int SendSize;
+
 #define NumberofinBuffers 4
 
 #define Now getTicks()
@@ -535,8 +559,7 @@ typedef struct TAX25Port_t
 #define MODEM_CAPTION 'SoundModem by UZ7HO'
 #define MODEM_VERSION '1.06'
 #define SND_IDLE 0
-#define SND_RX 1
-#define SND_TX 2
+#define SND_TX 1
 #define BUF_EMPTY 0
 #define BUF_FULL 1
 #define DISP_MONO FALSE
@@ -556,7 +579,7 @@ typedef struct TAX25Port_t
 #define DEBUG_SOUND 8
 #define IS_LAST TRUE
 #define IS_NOT_LAST FALSE
-#define modes_count 16
+#define modes_count 20
 #define SPEED_300 0
 #define SPEED_1200 1
 #define SPEED_600 2
@@ -571,8 +594,12 @@ typedef struct TAX25Port_t
 #define SPEED_MP400 11
 #define SPEED_DW2400 12
 #define SPEED_8P4800 13
-#define SPEED_AE2400 14
+#define SPEED_2400V26B 14
 #define SPEED_ARDOP 15
+#define SPEED_Q300 16
+#define SPEED_8PSK300 17
+#define SPEED_RUH48 18
+#define SPEED_RUH96 19
 
 #define MODE_FSK 0
 #define MODE_BPSK 1
@@ -581,10 +608,10 @@ typedef struct TAX25Port_t
 #define MODE_8PSK 4
 #define MODE_PI4QPSK 5
 #define MODE_ARDOP 6
+#define MODE_RUH 7
 
 #define QPSK_SM 0
 #define QPSK_V26 1
-
 
 #define MODEM_8P4800_BPF 3200
 #define MODEM_8P4800_TXBPF 3400
@@ -712,7 +739,7 @@ typedef struct TAX25Port_t
 
 #define ARDOPBufferSize 12000 * 100
 
-extern short ARDOPTXBuffer[4][12000 * 100];	// Enough to hold whole frame of samples
+extern short ARDOPTXBuffer[4][ARDOPBufferSize];	// Enough to hold whole frame of samples
 
 extern int ARDOPTXLen[4];				// Length of frame
 extern int ARDOPTXPtr[4];				// Tx Pointer
@@ -755,6 +782,7 @@ extern int soundChannel[5];
 extern int modemtoSoundLR[4];
 
 extern short rx_freq[5];
+extern short active_rx_freq[5];
 extern short rx_shift[5];
 extern short rx_baudrate[5];
 extern short rcvr_offset[5];
@@ -767,6 +795,7 @@ extern UCHAR tx_status[5];
 extern float tx_freq[5];
 extern float tx_shift[5];
 extern unsigned short tx_baudrate[5];
+extern unsigned short tx_bitrate[5];
 
 extern unsigned short bpf[5];
 extern unsigned short lpf[5];
@@ -834,10 +863,13 @@ extern UCHAR tx_buf_num[5];
 extern int speed[5];
 extern int panels[6];
 
+extern int FFTSize;
+#define fft_size FFTSize
+
 extern float fft_window_arr[2048];
 //  fft_s,fft_d array[0..2047] of TComplex;
-extern short fft_buf[5][2048];
-extern UCHAR fft_disp[5][2048];
+extern short fft_buf[2][8192];
+extern UCHAR fft_disp[2][1024];
 //  bm array[1..4] of TBitMap;
 //  bm1,bm2,bm3 TBitMap;
 
@@ -915,6 +947,7 @@ extern BOOL Secondwaterfall;
 extern int dcd_threshold;
 extern int rxOffset;
 extern int chanOffset[4];
+extern int Continuation[4];	// Sending 2nd or more packet of burst
 
 extern boolean busy;
 extern boolean dcd[5];
@@ -964,6 +997,10 @@ extern int tx_fx25_mode[4];
 
 extern int SatelliteMode;
 
+extern int using48000;			// Set if using 48K sample rate (ie RUH Modem active)
+
+extern int txmin, txmax;
+
 // Function prototypes
 
 void KISS_send_ack(UCHAR port, string * data);
@@ -1002,7 +1039,7 @@ double pila(double x);
 
 void AGW_Raw_monitor(int snd_ch, string * data);
 
-// Dephi emulation functions
+// Delphi emulation functions
 
 string * Strings(TStringList * Q, int Index);
 void Clear(TStringList * Q);
@@ -1041,6 +1078,46 @@ int  my_indexof(TStringList * l, string * s);
 boolean compareStrings(string * a, string * b);
 
 int Add(TStringList * Q, string * Entry);
+
+
+#define IL2P_SYNC_WORD_SIZE 3
+#define IL2P_HEADER_SIZE 13	// Does not include 2 parity.
+#define IL2P_HEADER_PARITY 2
+
+#define IL2P_MAX_PAYLOAD_SIZE 1023
+#define IL2P_MAX_PAYLOAD_BLOCKS 5
+#define IL2P_MAX_PARITY_SYMBOLS 16		// For payload only.
+#define IL2P_MAX_ENCODED_PAYLOAD_SIZE (IL2P_MAX_PAYLOAD_SIZE + IL2P_MAX_PAYLOAD_BLOCKS * IL2P_MAX_PARITY_SYMBOLS)
+
+struct il2p_context_s {
+
+	enum { IL2P_SEARCHING = 0, IL2P_HEADER, IL2P_PAYLOAD, IL2P_DECODE } state;
+
+	unsigned int acc;	// Accumulate most recent 24 bits for sync word matching.
+				// Lower 8 bits are also used for accumulating bytes for
+				// the header and payload.
+
+	int bc;			// Bit counter so we know when a complete byte has been accumulated.
+
+	int polarity;		// 1 if opposite of expected polarity.
+
+	unsigned char shdr[IL2P_HEADER_SIZE + IL2P_HEADER_PARITY];
+	// Scrambled header as received over the radio.  Includes parity.
+	int hc;			// Number if bytes placed in above.
+
+	unsigned char uhdr[IL2P_HEADER_SIZE];  // Header after FEC and unscrambling.
+
+	int eplen;		// Encoded payload length.  This is not the nuumber from
+				// from the header but rather the number of encoded bytes to gather.
+
+	unsigned char spayload[IL2P_MAX_ENCODED_PAYLOAD_SIZE];
+	// Scrambled and encoded payload as received over the radio.
+	int pc;			// Number of bytes placed in above.
+
+	int corrected;		// Number of symbols corrected by RS FEC.
+};
+
+
 #ifdef __cplusplus
 }
 #endif

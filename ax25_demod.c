@@ -29,6 +29,10 @@ void  make_rx_frame_FX25(int snd_ch, int rcvr_nr, int emph, string * data);
 string * memory_ARQ(TStringList * buf, string * data);
 
 float GuessCentreFreq(int i);
+void ProcessRXFrames(int snd_ch);
+
+extern struct il2p_context_s *il2p_context[4][16][3];
+
 
 /*
 
@@ -115,6 +119,8 @@ longword DCD_header[5] = { 0 };
 int dcd_on_hdr[5] = { 0 };
 
 extern int centreFreq[4];
+
+float lastangle[4];			// pevious value for differential modes
  
 
 unsigned short n_INTR[5] = { 1,1,1,1,1 };
@@ -153,6 +159,12 @@ int soundChannel[5] = { 0 };		// 0 = Unused 1 = Left 2 = Right 3 = Mono
 int modemtoSoundLR[4] = { 0 };
 
 struct TDetector_t  DET[nr_emph + 1][16];
+
+// Chan, Decoder, Emph
+
+float Phases[4][16][nr_emph + 1][4096];
+float Mags[4][16][nr_emph + 1][4096];
+int nPhases[4][16][nr_emph + 1];
 
 TStringList detect_list_l[5];
 TStringList detect_list[5];
@@ -338,6 +350,10 @@ void chk_dcd1(int snd_ch, int buf_size)
 	tick = 1000 / RX_Samplerate;
 
 	if (modem_mode[snd_ch] == MODE_ARDOP)
+	{
+		dcd_bit_sync[snd_ch] = blnBusyStatus;
+	}
+	else if (modem_mode[snd_ch] == MODE_RUH)
 	{
 		dcd_bit_sync[snd_ch] = blnBusyStatus;
 	}
@@ -1341,7 +1357,7 @@ int stats[2] = { 0 };
 void decode_stream_MPSK(int snd_ch, int rcvr_nr, float *  src, int buf_size, int  last)
 {
 
-#ifndef WIN32
+#ifndef XXXX
 
 	// Until ASM is converted
 
@@ -2787,6 +2803,9 @@ void decode_stream_BPSK(int last, int snd_ch, int rcvr_nr, int emph, float * src
 			angle = atan2f(sumIQ2, sumIQ1);
 			PSK_IZ1 = PkAmpI;
 			PSK_QZ1 = PkAmpQ;
+
+			float Mag = sqrtf(powf(PSK_IZ1, 2) + powf(PSK_QZ1, 2));
+
 			// Phase corrector
 
 			if (fabsf(angle) < PI5)
@@ -2808,11 +2827,24 @@ void decode_stream_BPSK(int last, int snd_ch, int rcvr_nr, int emph, float * src
 				bit = RX_BIT0;
 			//
 
+			//	is this the best place to store phase for constellation?
+			// only for ilp2 for now
+
 			if (il2p_mode[snd_ch])
+			{
+				struct il2p_context_s * il2p = il2p_context[snd_ch][rcvr_nr][emph];
+
+				if (il2p && il2p->state > IL2P_SEARCHING)
+				{
+					Phases[snd_ch][rcvr_nr][emph][nPhases[snd_ch][rcvr_nr][emph]] = angle;
+					Mags[snd_ch][rcvr_nr][emph][nPhases[snd_ch][rcvr_nr][emph]++] = Mag;
+					if (nPhases[snd_ch][rcvr_nr][emph] > 4090)
+						nPhases[snd_ch][rcvr_nr][emph]--;
+				}
 				il2p_rec_bit(snd_ch, rcvr_nr, emph, bit);
 				if (il2p_mode[snd_ch] == IL2P_MODE_ONLY)		// Dont try HDLC decode
 					continue;
-
+			}
 			if (bit)
 				stats[1]++;
 			else
@@ -2949,7 +2981,6 @@ void decode_stream_QPSK(int last, int snd_ch, int rcvr_nr, int emph, float * src
 
 	struct TDetector_t * pDET = &DET[emph][rcvr_nr];
 
-
 	bit_stuff_cnt = pDET->bit_stuff_cnt[snd_ch];
 	last_rx_bit = pDET->last_rx_bit[snd_ch];
 	sample_cnt = pDET->sample_cnt[snd_ch];
@@ -3073,6 +3104,8 @@ void decode_stream_QPSK(int last, int snd_ch, int rcvr_nr, int emph, float * src
 			PSK_IZ1 = PkAmpI;
 			PSK_QZ1 = PkAmpQ;
 
+			float Mag = sqrtf(powf(PSK_IZ1, 2) + powf(PSK_QZ1, 2));
+
 			if (angle > pi || angle < -pi)
 				angle = angle;
 
@@ -3120,6 +3153,8 @@ void decode_stream_QPSK(int last, int snd_ch, int rcvr_nr, int emph, float * src
 			}
 			else
 			{
+				// "Normal" QPSK
+	
 				// Phase corrector
 
 				// I think this sends 0 90 180 270
@@ -3157,6 +3192,26 @@ void decode_stream_QPSK(int last, int snd_ch, int rcvr_nr, int emph, float * src
 			for (j = 0; j < 2; j++)
 			{
 				dibit = dibit << 1;
+
+				//	is this the best place to store phase for constellation?
+				// only for ilp2 for now
+
+				if (il2p_mode[snd_ch])
+				{
+					struct il2p_context_s * il2p = il2p_context[snd_ch][rcvr_nr][emph];
+
+					if (il2p && il2p->state > IL2P_SEARCHING)
+					{
+						Phases[snd_ch][rcvr_nr][emph][nPhases[snd_ch][rcvr_nr][emph]] = angle;
+						Mags[snd_ch][rcvr_nr][emph][nPhases[snd_ch][rcvr_nr][emph]++] = Mag;
+						if (nPhases[snd_ch][rcvr_nr][emph] > 4090)
+							nPhases[snd_ch][rcvr_nr][emph]--;
+					}
+
+					il2p_rec_bit(snd_ch, rcvr_nr, emph, (dibit & RX_BIT1));
+					if (il2p_mode[snd_ch] == IL2P_MODE_ONLY)		// Dont try HDLC decode
+						continue;
+				}
 
 				// NRZI
 
@@ -3328,7 +3383,13 @@ void decode_stream_8PSK(int last, int snd_ch, int rcvr_nr, int emph, float * src
 		dcd_bit_cnt[snd_ch] = 0;
 	}
 
-	baudrate = 1600 / 6;
+	// Not sure how this works
+
+	if (tx_baudrate[snd_ch] == 300)
+		baudrate = 300;
+	else
+		baudrate = 1600 / 6;
+
 	div_bit_afc = 1.0 / round(BIT_AFC*(RX_Samplerate / 11025));
 	x = baudrate / RX_Samplerate;
 	max_cnt = round(RX_Samplerate / baudrate) + 1;
@@ -3365,7 +3426,7 @@ void decode_stream_8PSK(int last, int snd_ch, int rcvr_nr, int emph, float * src
 		bit_osc = bit_osc + x;
 
 		if (bit_osc >= 1)
-		{
+		{			
 			if (sample_cnt <= max_cnt)
 				for (k = sample_cnt; k <= max_cnt; k++)
 					bit_buf[k] = 0.95*bit_buf[k];
@@ -3403,6 +3464,8 @@ void decode_stream_8PSK(int last, int snd_ch, int rcvr_nr, int emph, float * src
 			PSK_IZ1 = PkAmpI;
 			PSK_QZ1 = PkAmpQ;
 
+			float Mag = sqrtf(powf(PSK_IZ1, 2) + powf(PSK_QZ1, 2));
+
 			// Phase corrector
 
 			if (fabsf(angle) < PI125)
@@ -3431,8 +3494,7 @@ void decode_stream_8PSK(int last, int snd_ch, int rcvr_nr, int emph, float * src
 
 			AngleCorr = AngleCorr * 0.95 - KCorr * 0.05;
 			angle = angle + AngleCorr;
-			//
-
+			
 			if (fabsf(angle) < PI125)
 				tribit = 1;
 			if (angle >= PI125 && angle < PI375)
@@ -3455,6 +3517,29 @@ void decode_stream_8PSK(int last, int snd_ch, int rcvr_nr, int emph, float * src
 			for (j = 0; j < 3; j++)
 			{
 				tribit = tribit << 1;
+
+				// look for il2p before nrzi 
+
+				//	is this the best place to store phase for constellation?
+				// only for ilp2 for now
+
+				if (il2p_mode[snd_ch])
+				{
+					struct il2p_context_s * il2p = il2p_context[snd_ch][rcvr_nr][emph];
+					
+					if (il2p && il2p->state > IL2P_SEARCHING)
+					{
+						Phases[snd_ch][rcvr_nr][emph][nPhases[snd_ch][rcvr_nr][emph]] = angle;
+						Mags[snd_ch][rcvr_nr][emph][nPhases[snd_ch][rcvr_nr][emph]++] = Mag;
+					if (nPhases[snd_ch][rcvr_nr][emph] > 4090)
+						nPhases[snd_ch][rcvr_nr][emph]--;
+					}
+
+					il2p_rec_bit(snd_ch, rcvr_nr, emph, tribit & RX_BIT1);
+					if (il2p_mode[snd_ch] == IL2P_MODE_ONLY)		// Dont try HDLC decode
+						continue;
+				}
+
 				//NRZI
 
 				if (last_rx_bit == (tribit & RX_BIT1))
@@ -3733,6 +3818,14 @@ void make_core_INTR(UCHAR snd_ch)
 		n_INTR[snd_ch] = 1;
 		break;
 
+
+	case SPEED_Q300:
+	case SPEED_8PSK300:
+
+		width = roundf(RX_Samplerate / 2);
+		n_INTR[snd_ch] = 1;
+		break;
+
 	case SPEED_600:
 
 		width = roundf(RX_Samplerate / 4);
@@ -3755,6 +3848,11 @@ void make_core_INTR(UCHAR snd_ch)
 		n_INTR[snd_ch] = 4;
 		break;
 
+//	case SPEED_Q1200:
+//		width = roundf(RX_Samplerate / 8);
+//		n_INTR[snd_ch] = 4;
+//		break;
+
 	case SPEED_Q2400:
 		width = 300;
 		n_INTR[snd_ch] = 4;
@@ -3766,7 +3864,7 @@ void make_core_INTR(UCHAR snd_ch)
 		n_INTR[snd_ch] = 4;
 		break;
 
-	case SPEED_AE2400:
+	case SPEED_2400V26B:
 
 		width = 300;
 		n_INTR[snd_ch] = 4;
@@ -3784,6 +3882,7 @@ void make_core_INTR(UCHAR snd_ch)
 		break;
 
 	case SPEED_8P4800:
+
 		width = 100;
 		n_INTR[snd_ch] = 6;
 		break;
@@ -4121,7 +4220,7 @@ void Demodulator(int snd_ch, int rcvr_nr, float * src_buf, int last, int xcenter
 			QPSK_Demodulator(snd_ch, rcvr_nr, emph_db[snd_ch], last);
 	}
 
-	// QPSK demodulator
+	// 8PSK demodulator
 
 	if (modem_mode[snd_ch]==MODE_8PSK)
 	{
@@ -4147,120 +4246,125 @@ void Demodulator(int snd_ch, int rcvr_nr, float * src_buf, int last, int xcenter
 // I think this handles multiple decoders and passes packet on to next level
 
 // Packet manager
-
 	if (last)
+		ProcessRXFrames(snd_ch);
+}
+
+void ProcessRXFrames(int snd_ch)
+{
+	boolean fecflag = 0;
+	char indicators[5] = "-$#F+"; // None, Single, MEM, FEC, Normal
+
+	// Work out which decoder and which emph settings worked. 
+
+	if (snd_ch < 0 || snd_ch >3)
+		return;
+
+	if (detect_list[snd_ch].Count > 0)		// no point if nothing decoded
 	{
-		boolean fecflag = 0;
+		char decoded[32] = "";
 		char indicators[5] = "-$#F+"; // None, Single, MEM, FEC, Normal
+		char s_emph[4] = "";
+		int emph[4] = { 0 };
+		char report[32] = "";
+		int il2perrors = 255;
 
-		// Work out which decoder and which emph settings worked. 
+		// The is one DET for each Decoder for each Emph setting
 
-		if (detect_list[snd_ch].Count > 0)		// no point if nothing decoded
+		struct TDetector_t * pDET;
+		int i = 0, j, found;
+		int maxemph = nr_emph;
+
+		for (i = 0; i <= nr_emph; i++)
 		{
-			char decoded[32] = "";
-			char indicators[5] = "-$#F+"; // None, Single, MEM, FEC, Normal
-			char s_emph[4] = "";
-			int emph[4] = { 0 };
-			char report[32] = "";
-			int il2perrors = 255;
+			for (j = 0; j <= RCVR[snd_ch] * 2; j++)
+			{
+				pDET = &DET[i][j];
 
-			// The is one DET for each Decoder for each Emph setting
+				if (pDET->rx_decoded > decoded[j])		// Better than other one (| is higher than F)
+					decoded[j] = pDET->rx_decoded;
 
-			struct TDetector_t * pDET;
-			int i = 0, j;
-			int maxemph = nr_emph;
+				if (pDET->emph_decoded > emph[i])
+					emph[i] = pDET->emph_decoded;
 
+				if (il2perrors > pDET->errors)
+					il2perrors = pDET->errors;
+
+				pDET->rx_decoded = 0;
+				pDET->emph_decoded = 0;					// Ready for next time
+				pDET->errors = 255;
+			}
+			if (emph_all[snd_ch] == 0)
+				break;
+		}
+
+		decoded[j] = 0;
+
+		for (j--; j >= 0; j--)
+			decoded[j] = indicators[decoded[j]];
+
+		if (emph_all[snd_ch])
+		{
 			for (i = 0; i <= nr_emph; i++)
 			{
-				for (j = 0; j <= RCVR[snd_ch] * 2; j++)
-				{
-					pDET = &DET[i][j];
-
-					if (pDET->rx_decoded > decoded[j])		// Better than other one (| is higher than F)
-						decoded[j] = pDET->rx_decoded;
-
-					if (pDET->emph_decoded > emph[i])
-						emph[i] = pDET->emph_decoded;
-
-					if (il2perrors > pDET->errors)
-						il2perrors = pDET->errors;
-
-					pDET->rx_decoded = 0;
-					pDET->emph_decoded = 0;					// Ready for next time
-					pDET->errors = 255;
-				}
-				if (emph_all[snd_ch] == 0)
-					break;
+				s_emph[i] = indicators[emph[i]];
 			}
+			sprintf(report, "%s][%s", s_emph, decoded);
+		}
 
-			decoded[j] = 0;
+		else
+			strcpy(report, decoded);
 
-			for (j--; j >= 0; j--)
-				decoded[j] = indicators[decoded[j]];
+		if (detect_list_c[snd_ch].Items[0]->Length)
+		{
+			if (il2perrors < 255 && il2perrors > 0)
+				sprintf(detect_list_c[snd_ch].Items[0]->Data, "%s-%d", detect_list_c[snd_ch].Items[0]->Data, il2perrors);
 
-			if (emph_all[snd_ch])
+			strcat(report, "][");
+			strcat(report, detect_list_c[snd_ch].Items[0]->Data);
+		}
+
+		if (detect_list[snd_ch].Count > 0)
+		{
+			for (i = 0; i < detect_list[snd_ch].Count; i++)
 			{
-				for (i = 0; i <= nr_emph; i++)
+				found = 0;
+
+				//					if (detect_list_l[snd_ch].Count > 0)
+				//						if (my_indexof(&detect_list_l[snd_ch], detect_list[snd_ch].Items[i]) > -1)
+				//							found = 1;
+
+				if (found == 0)
 				{
-					s_emph[i] = indicators[emph[i]];
-				}
-				sprintf(report, "%s][%s", s_emph, decoded);
-			}
-
-			else
-				strcpy(report, decoded);
-
-			if (detect_list_c[snd_ch].Items[0]->Length)
-			{
-				if (il2perrors < 255 && il2perrors > 0)
-					sprintf(detect_list_c[snd_ch].Items[0]->Data, "%s-%d", detect_list_c[snd_ch].Items[0]->Data, il2perrors);
-
-				strcat(report, "][");
-				strcat(report, detect_list_c[snd_ch].Items[0]->Data);
-			}
-
-			if (detect_list[snd_ch].Count > 0)
-			{
-				for (i = 0; i < detect_list[snd_ch].Count; i++)
-				{
-					found = 0;
-
-					//					if (detect_list_l[snd_ch].Count > 0)
-					//						if (my_indexof(&detect_list_l[snd_ch], detect_list[snd_ch].Items[i]) > -1)
-					//							found = 1;
-
-					if (found == 0)
+					if (modem_mode[snd_ch] == MODE_MPSK)
 					{
-						if (modem_mode[snd_ch] == MODE_MPSK)
-						{
-							//					analiz_frame(snd_ch, detect_list[snd_ch].Items[i]->Data, [snd_ch].Items[i]->Data + ' dF: ' + FloatToStrF(DET[0, 0].AFC_dF[snd_ch], ffFixed, 0, 1));
-						}
-						else
-						{
-							analiz_frame(snd_ch, detect_list[snd_ch].Items[i], report, fecflag);
-						}
+						//					analiz_frame(snd_ch, detect_list[snd_ch].Items[i]->Data, [snd_ch].Items[i]->Data + ' dF: ' + FloatToStrF(DET[0, 0].AFC_dF[snd_ch], ffFixed, 0, 1));
+					}
+					else
+					{
+						analiz_frame(snd_ch, detect_list[snd_ch].Items[i], report, fecflag);
 					}
 				}
-
-				// Cancel FX25 decode
-
-				if (fx25_mode[snd_ch] != FX25_MODE_NONE)
-				{
-					int e;
-
-					for (i = 0; i < 16; i++)
-						for (e = 0; e <= nr_emph; e++)
-							DET[e][i].fx25[snd_ch].status = FX25_TAG;
-				}
 			}
 
-			//			Assign(&detect_list_l[snd_ch], &detect_list[snd_ch]);	// Duplicate detect_list to detect_list_l
+			// Cancel FX25 decode
 
-			Clear(&detect_list[snd_ch]);
-			Clear(&detect_list_c[snd_ch]);
+			if (fx25_mode[snd_ch] != FX25_MODE_NONE)
+			{
+				int e;
+
+				for (i = 0; i < 16; i++)
+					for (e = 0; e <= nr_emph; e++)
+						DET[e][i].fx25[snd_ch].status = FX25_TAG;
+			}
 		}
-		chk_dcd1(snd_ch, rx_bufsize);
+
+		//			Assign(&detect_list_l[snd_ch], &detect_list[snd_ch]);	// Duplicate detect_list to detect_list_l
+
+		Clear(&detect_list[snd_ch]);
+		Clear(&detect_list_c[snd_ch]);
 	}
+	chk_dcd1(snd_ch, rx_bufsize);
 }
 
 string * memory_ARQ(TStringList * buf, string * data)

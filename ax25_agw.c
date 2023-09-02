@@ -22,7 +22,7 @@ along with QtSoundModem.  If not, see http://www.gnu.org/licenses
 
 #include "UZ7HOStuff.h"
 
-extern char modes_name[modes_count][20];
+extern char modes_name[modes_count][21];
 extern int RSID_SABM[4];
 extern int RSID_UI[4];
 extern int RSID_SetModem[4];

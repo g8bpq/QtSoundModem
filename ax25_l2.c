@@ -1410,8 +1410,10 @@ void analiz_frame(int snd_ch, string * frame, char * code, boolean fecflag)
 
 	decode_frame(frame->Data, frame->Length, path, data, &pid, &nr, &ns, &f_type, &f_id, &rpt, &pf, &cr);
 
-	//  if is_excluded_call(snd_ch,path) then excluded:=TRUE;
-	 // if is_excluded_frm(snd_ch,f_id,data) then excluded:=TRUE;
+	if (is_excluded_call(snd_ch, path))
+		excluded =TRUE;
+
+	// if is_excluded_frm(snd_ch,f_id,data) then excluded:=TRUE;
 	
 
 	if (excluded)

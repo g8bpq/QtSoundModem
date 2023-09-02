@@ -124,9 +124,9 @@
    <widget class="QLabel" name="WaterfallA">
     <property name="geometry">
      <rect>
-      <x>0</x>
+      <x>80</x>
       <y>488</y>
-      <width>953</width>
+      <width>881</width>
       <height>80</height>
      </rect>
     </property>

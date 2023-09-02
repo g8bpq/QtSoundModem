@@ -45,6 +45,7 @@ extern UCHAR modem_mode[];
 #define sbc 175
 
 extern single  ch_offset[4];
+int Continuation[4] = { 0, 0, 0, 0 };	// Sending 2nd or more packet of burst
 
 #define COS45 0.70710676908493f
 
@@ -89,7 +90,8 @@ float tx_osc[5] = {0};		//						 : array[1..4] of single=(0,0,0,0};
 float tx_bit_osc[5] = {0};		//			   : array[1..4] of single=(0,0,0,0};
 unsigned short txbpf[5] = { 400, 400, 400, 400, 400};		//						  : array[1..4] of word=(400,400,400,400};
 unsigned short  tx_BPF_tap[5] = { 256, 256, 256, 256, 256};		//			   : array[1..4] of word=(256,256,256,256};
-unsigned short  tx_baudrate[5] = { 300, 300, 300, 300, 300};		//			  : array[1..4] of word=(300,300,300,300};
+unsigned short  tx_baudrate[5] = { 300, 300, 300, 300, 300 };		//			  : array[1..4] of word=(300,300,300,300};
+unsigned short  tx_bitrate[5] = { 300, 300, 300, 300, 300 };		//			  : array[1..4] of word=(300,300,300,300};
 unsigned short  tx_BPF_timer[5] = {0};		//			 : array[1..4] of word=(0,0,0,0};
 UCHAR tx_pol[5] = {0};		//						 : array[1..4] of byte=(0,0,0,0};
 UCHAR tx_last_pol[5] = {0};		//			  : array[1..4] of byte=(0,0,0,0};
@@ -1191,9 +1193,11 @@ float make_samples(unsigned char  snd_ch, unsigned char * bitptr)
 	
 			if (il2p_mode[snd_ch] >= IL2P_MODE_TXRX)
 			{
+				// il2p generates TXDELAY as part of the frame, so go straight to TX_FRAME
+			
 				if (tx_status[snd_ch] == TX_DELAY)
-					tx_status[snd_ch] = TX_FRAME;			// il2p generates TXDELAY as part of the frame, so go straight to TX_FRAME
-
+					tx_status[snd_ch] = TX_FRAME;
+	
 				if (tx_status[snd_ch] == TX_TAIL)
 					bit = get_new_bit_tail(snd_ch, bit);
 
@@ -1240,6 +1244,8 @@ float make_samples(unsigned char  snd_ch, unsigned char * bitptr)
 				tx_status[snd_ch] = TX_DELAY;
 			}
 
+
+
 			// il2p generates TXDELAY as part of the frame, so go straight too TX_FRAME
 
 			if (tx_status[snd_ch] == TX_DELAY)
@@ -1273,7 +1279,7 @@ float make_samples(unsigned char  snd_ch, unsigned char * bitptr)
 
 		// QPSK Mode
 
-		if (modem_mode[snd_ch] == MODE_QPSK)
+		else if (modem_mode[snd_ch] == MODE_QPSK)
 		{
 			dibit = 0;
 			for (i = 0; i < 2; i++)
@@ -1284,13 +1290,35 @@ float make_samples(unsigned char  snd_ch, unsigned char * bitptr)
 					tx_delay_cnt[snd_ch] = 0;
 					tx_status[snd_ch] = TX_DELAY;
 				}
-				if (tx_status[snd_ch] == TX_DELAY)
-					bit = get_new_bit_delay(snd_ch, bit);
-				if (tx_status[snd_ch] == TX_TAIL)
-					bit = get_new_bit_tail(snd_ch, bit);
-				if (tx_status[snd_ch] == TX_FRAME)
-					bit = get_new_bit(snd_ch, bit);
-				dibit = (dibit << 1) | tx_nrzi(snd_ch, bit);
+
+				if (il2p_mode[snd_ch] >= IL2P_MODE_TXRX)
+				{
+					if (tx_status[snd_ch] == TX_DELAY)
+						tx_status[snd_ch] = TX_FRAME;			// il2p generates TXDELAY as part of the frame, so go straight to TX_FRAME
+
+					if (tx_status[snd_ch] == TX_TAIL)
+						bit = get_new_bit_tail(snd_ch, bit);
+
+					if (tx_status[snd_ch] == TX_FRAME)
+						bit = il2p_get_new_bit(snd_ch, bit);
+
+					// No nrzi for il2p
+
+					dibit = (dibit << 1) | bit;
+				}
+				else
+				{
+					// ax25/fx25
+
+					if (tx_status[snd_ch] == TX_DELAY)
+						bit = get_new_bit_delay(snd_ch, bit);
+					if (tx_status[snd_ch] == TX_TAIL)
+						bit = get_new_bit_tail(snd_ch, bit);
+					if (tx_status[snd_ch] == TX_FRAME)
+						bit = get_new_bit(snd_ch, bit);
+					dibit = (dibit << 1) | tx_nrzi(snd_ch, bit);
+
+				}
 			}
 
 
@@ -1348,19 +1376,38 @@ float make_samples(unsigned char  snd_ch, unsigned char * bitptr)
 					tx_status[snd_ch] = TX_DELAY;
 				}
 
-				if (tx_status[snd_ch] == TX_DELAY)
-					bit = get_new_bit_delay(snd_ch, bit);
+				if (il2p_mode[snd_ch] >= IL2P_MODE_TXRX)
+				{
+					if (tx_status[snd_ch] == TX_DELAY)
+						tx_status[snd_ch] = TX_FRAME;			// il2p generates TXDELAY as part of the frame, so go straight to TX_FRAME
 
-				if (tx_status[snd_ch] == TX_TAIL)
-					bit = get_new_bit_tail(snd_ch, bit);
+					if (tx_status[snd_ch] == TX_TAIL)
+						bit = get_new_bit_tail(snd_ch, bit);
 
-				if (tx_status[snd_ch] == TX_FRAME)
-					bit = get_new_bit(snd_ch, bit);
+					if (tx_status[snd_ch] == TX_FRAME)
+						bit = il2p_get_new_bit(snd_ch, bit);
 
-				*bitptr = tx_nrzi(snd_ch, bit);
+					// No nrzi for il2p
 
-				dibit = (dibit << 1) | *bitptr;
+					dibit = (dibit << 1) | bit;
+				}
+				else
+				{
+					// ax25/fx25
 
+					if (tx_status[snd_ch] == TX_DELAY)
+						bit = get_new_bit_delay(snd_ch, bit);
+
+					if (tx_status[snd_ch] == TX_TAIL)
+						bit = get_new_bit_tail(snd_ch, bit);
+
+					if (tx_status[snd_ch] == TX_FRAME)
+						bit = get_new_bit(snd_ch, bit);
+
+					*bitptr = tx_nrzi(snd_ch, bit);
+			
+					dibit = (dibit << 1) | *bitptr;
+				}
 			}
 
 			// This returns 3,1,5 or 7 so we use the odd enties in the 8PSK table
@@ -1436,16 +1483,36 @@ float make_samples(unsigned char  snd_ch, unsigned char * bitptr)
 					tx_delay_cnt[snd_ch] = 0;
 					tx_status[snd_ch] = TX_DELAY;
 				}
-				if (tx_status[snd_ch] == TX_DELAY)
-					bit = get_new_bit_delay(snd_ch, bit);
-				if (tx_status[snd_ch] == TX_TAIL)
-					bit = get_new_bit_tail(snd_ch, bit);
-				if (tx_status[snd_ch] == TX_FRAME)
-					bit = get_new_bit(snd_ch, bit);
 
-				tribit = (tribit << 1) | tx_nrzi(snd_ch, bit);
+				if (il2p_mode[snd_ch] >= IL2P_MODE_TXRX)
+				{
+					if (tx_status[snd_ch] == TX_DELAY)
+						tx_status[snd_ch] = TX_FRAME;			// il2p generates TXDELAY as part of the frame, so go straight to TX_FRAME
+
+					if (tx_status[snd_ch] == TX_TAIL)
+						bit = get_new_bit_tail(snd_ch, bit);
+
+					if (tx_status[snd_ch] == TX_FRAME)
+						bit = il2p_get_new_bit(snd_ch, bit);
+
+					// No nrzi for il2p
+
+					tribit = (tribit << 1) | bit;
+				}
+				else
+				{
+					// ax25/fx25
+
+					if (tx_status[snd_ch] == TX_DELAY)
+						bit = get_new_bit_delay(snd_ch, bit);
+					if (tx_status[snd_ch] == TX_TAIL)
+						bit = get_new_bit_tail(snd_ch, bit);
+					if (tx_status[snd_ch] == TX_FRAME)
+						bit = get_new_bit(snd_ch, bit);
+
+					tribit = (tribit << 1) | tx_nrzi(snd_ch, bit);
+				}
 			}
-
 			tribit = gray_8PSK[tribit & 7];
 
 			tx_8PSK[snd_ch] = (tx_8PSK[snd_ch] + tribit) & 7;
@@ -1632,7 +1699,7 @@ float make_samples_calib(UCHAR snd_ch, UCHAR tones)
 	return amp * sinf(tx_osc[snd_ch]);
 }
 
-int amplitude = 22000;
+float amplitude = 32000;
 
 void modulator(UCHAR snd_ch, int buf_size)
 {
@@ -1641,7 +1708,7 @@ void modulator(UCHAR snd_ch, int buf_size)
 	// I think this is the top of the TX hierarchy
 
 	int i;
-	short Sample;
+	int Sample;
 
 	if (calib_mode[snd_ch] > 0)
 	{
@@ -1694,6 +1761,12 @@ void modulator(UCHAR snd_ch, int buf_size)
 		for (i = 0; i < buf_size; i++)
 		{
 			Sample = tx_BPF_buf[snd_ch][i] * amplitude;
+
+			if (Sample < txmin)
+				txmin = Sample;
+			else if (Sample > txmax)
+				txmax = Sample;
+
 			SampleSink(modemtoSoundLR[snd_ch], Sample);
 		}
 	}
@@ -1734,7 +1807,22 @@ void modulator(UCHAR snd_ch, int buf_size)
 
 		for (i = 0; i < buf_size; i++)
 		{
-			Sample = tx_BPF_buf[snd_ch][i] * 20000.0f;
+			Sample = tx_BPF_buf[snd_ch][i] * amplitude;
+
+			if (Sample < txmin)
+				txmin = Sample;
+			else if (Sample > txmax)
+			{
+				txmax = Sample;
+
+				if (txmax > 32767)
+				{
+					amplitude = amplitude * 32767 / txmax;
+					txmax = 32767;
+					Sample = 32767;
+				}
+			}
+
 			SampleSink(modemtoSoundLR[snd_ch], Sample);
 		}
 	}

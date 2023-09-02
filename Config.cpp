@@ -1,4 +1,4 @@
-/*
+/*extern "C" 
 Copyright (C) 2019-2020 Andrei Kopanchuk UZ7HO
 
 This file is part of QtSoundModem
@@ -21,6 +21,7 @@ along with QtSoundModem.  If not, see http://www.gnu.org/licenses
 // UZ7HO Soundmodem Port by John Wiseman G8BPQ
 
 #include <QSettings>
+#include <QDialog>
 
 #include "UZ7HOStuff.h"
 
@@ -31,6 +32,9 @@ extern "C" int SoundMode;
 extern "C" int RX_SR;
 extern "C" int TX_SR;
 extern "C" int multiCore;
+extern "C" char * Wisdom;
+extern int WaterfallMin;
+extern int WaterfallMax;
 
 extern "C" word MEMRecovery[5];
 
@@ -40,8 +44,11 @@ extern "C" int UDPServerPort;
 extern "C" int TXPort;
 
 extern char UDPHost[64];
+extern QDialog * constellationDialog;
+extern QRect PSKRect;
 
 extern char CWIDCall[128];
+extern "C" char CWIDMark[32];
 extern int CWIDInterval;
 extern int CWIDLeft;
 extern int CWIDRight;
@@ -63,9 +70,13 @@ void GetPortSettings(int Chan);
 QVariant getAX25Param(const char * key, QVariant Default)
 {
 	char fullKey[64];
-
+	QVariant Q;
+	QByteArray x;
 	sprintf(fullKey, "%s/%s", Prefix, key);
-	return settings->value(fullKey, Default);
+	Q = settings->value(fullKey, Default);
+	x = Q.toString().toUtf8();
+
+	return Q;
 }
 
 void getAX25Params(int chan)
@@ -89,8 +100,6 @@ void GetPortSettings(int Chan)
 	resptime[Chan] = getAX25Param("RespTime", 1500).toInt();
 	TXFrmMode[Chan] = getAX25Param("TXFrmMode", 1).toInt();
 	max_frame_collector[Chan] = getAX25Param("FrameCollector", 6).toInt();
-	//exclude_callsigns[Chan]= getAX25Param("ExcludeCallsigns/");
-	//exclude_APRS_frm[Chan]= getAX25Param("ExcludeAPRSFrmType/");
 	KISS_opt[Chan] = getAX25Param("KISSOptimization", false).toInt();;
 	dyn_frack[Chan] = getAX25Param("DynamicFrack", false).toInt();;
 	recovery[Chan] = getAX25Param("BitRecovery", 0).toInt();
@@ -99,6 +108,8 @@ void GetPortSettings(int Chan)
 	IPOLL[Chan] = getAX25Param("IPOLL", 80).toInt();
 
 	strcpy(MyDigiCall[Chan], getAX25Param("MyDigiCall", "").toString().toUtf8());
+	strcpy(exclude_callsigns[Chan], getAX25Param("ExcludeCallsigns", "").toString().toUtf8());
+
 	fx25_mode[Chan] = getAX25Param("FX25", FX25_MODE_RX).toInt();
 	il2p_mode[Chan] = getAX25Param("IL2P", IL2P_MODE_NONE).toInt();
 	RSID_UI[Chan] = getAX25Param("RSID_UI", 0).toInt();
@@ -112,6 +123,8 @@ void getSettings()
 
 	QSettings* settings = new QSettings("QtSoundModem.ini", QSettings::IniFormat);
 	settings->sync();
+
+	PSKRect = settings->value("PSKWindow").toRect();
 
 	SoundMode = settings->value("Init/SoundMode", 0).toInt();
 	UDPClientPort = settings->value("Init/UDPClientPort", 8888).toInt();
@@ -150,9 +163,12 @@ void getSettings()
 
 	DualPTT = settings->value("Init/DualPTT", 1).toInt();
 	TX_rotate = settings->value("Init/TXRotate", 0).toInt();
-
 	multiCore = settings->value("Init/multiCore", 0).toInt();
 	MintoTray = settings->value("Init/MinimizetoTray", 1).toInt();
+	Wisdom = strdup(settings->value("Init/Wisdom", "").toString().toUtf8());
+	WaterfallMin = settings->value("Init/WaterfallMin", 0).toInt();
+	WaterfallMax = settings->value("Init/WaterfallMax", 3300).toInt();
+
 
 	rx_freq[0] = settings->value("Modem/RXFreq1", 1700).toInt();
 	rx_freq[1] = settings->value("Modem/RXFreq2", 1700).toInt();
@@ -209,7 +225,13 @@ void getSettings()
 	txdelay[2] = settings->value("Modem/TxDelay3", 250).toInt();
 	txdelay[3] = settings->value("Modem/TxDelay4", 250).toInt();
 
+	txtail[0] = settings->value("Modem/TxTail1", 50).toInt();
+	txtail[1] = settings->value("Modem/TxTail2", 50).toInt();
+	txtail[2] = settings->value("Modem/TxTail3", 50).toInt();
+	txtail[3] = settings->value("Modem/TxTail4", 50).toInt();
+
 	strcpy(CWIDCall, settings->value("Modem/CWIDCall", "").toString().toUtf8().toUpper());
+	strcpy(CWIDMark, settings->value("Modem/CWIDMark", "").toString().toUtf8().toUpper());
 	CWIDInterval = settings->value("Modem/CWIDInterval", 0).toInt();
 	CWIDLeft = settings->value("Modem/CWIDLeft", 0).toInt();
 	CWIDRight = settings->value("Modem/CWIDRight", 0).toInt();
@@ -331,6 +353,7 @@ void saveSettings()
 {
 	QSettings * settings = new QSettings("QtSoundModem.ini", QSettings::IniFormat);
 
+	settings->setValue("PSKWindow", constellationDialog->geometry());
 	settings->setValue("Init/SoundMode", SoundMode);
 	settings->setValue("Init/UDPClientPort", UDPClientPort);
 	settings->setValue("Init/UDPServerPort", UDPServerPort);
@@ -366,8 +389,11 @@ void saveSettings()
 	settings->setValue("Init/HamLibPort", HamLibPort);
 	settings->setValue("Init/HamLibHost", HamLibHost);
 	settings->setValue("Init/MinimizetoTray", MintoTray);
-
 	settings->setValue("Init/multiCore", multiCore);
+	settings->setValue("Init/Wisdom", Wisdom);
+
+	settings->setValue("Init/WaterfallMin", WaterfallMin);
+	settings->setValue("Init/WaterfallMax", WaterfallMax);
 
 	// Don't save freq on close as it could be offset by multiple decoders
 
@@ -423,6 +449,7 @@ void saveSettings()
 	settings->setValue("Modem/TxTail4", txtail[3]);
 
 	settings->setValue("Modem/CWIDCall", CWIDCall);
+	settings->setValue("Modem/CWIDMark", CWIDMark);
 	settings->setValue("Modem/CWIDInterval", CWIDInterval);
 	settings->setValue("Modem/CWIDLeft", CWIDLeft);
 	settings->setValue("Modem/CWIDRight", CWIDRight);

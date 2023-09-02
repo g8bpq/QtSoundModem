@@ -43,7 +43,8 @@ SOURCES += ./audio.c \
     ./Modulate.c \
     ./ofdm.c \
     ./pktARDOP.c \
-     ./BusyDetect.c
+     ./BusyDetect.c \
+	 ./DW9600.c
 
 
 

@@ -48,6 +48,7 @@ along with QtSoundModem.  If not, see http://www.gnu.org/licenses
 #include "UZ7HOStuff.h"
 
 void Debugprintf(const char * format, ...);
+int SMUpdatePhaseConstellation(int chan, float * Phases, float * Mags, int intPSKPhase, int Count);
 
 #define MAX_ADEVS 3			
 
@@ -68,6 +69,10 @@ void Debugprintf(const char * format, ...);
 
 #define max(x, y) ((x) > (y) ? (x) : (y))
 #define min(x, y) ((x) < (y) ? (x) : (y))
+
+extern int nPhases[4][16][nr_emph + 1];
+extern float Phases[4][16][nr_emph + 1][4096];
+extern float Mags[4][16][nr_emph + 1][4096];
 
 /* For option to try fixing frames with bad CRC. */
 
@@ -99,14 +104,14 @@ float MagOut[4096];
 float MaxMagOut = 0;
 int MaxMagIndex = 0;
 
-// FFT Bin Size is 12000 / 2048
+// FFT Bin Size is 12000 / FFTSize
 
-#define BinSize 5.859375f
 #ifndef FX25_H
 #define FX25_H
 
 #include <stdint.h>	// for uint64_t
 
+extern unsigned int pskStates[4];
 
 /* Reed-Solomon codec control block */
 struct rs {
@@ -643,9 +648,14 @@ float GuessCentreFreq(int i)
 	int n;
 	float Max = 0;
 	int Index = 0;
+	float BinSize = 12000.0 / FFTSize;
 
 	Start = (rx_freq[i] - RCVR[i] * rcvr_offset[i]) / BinSize;
 	End = (rx_freq[i] + RCVR[i] * rcvr_offset[i]) / BinSize;
+
+	Start = (active_rx_freq[i] - RCVR[i] * rcvr_offset[i]) / BinSize;
+	End = (active_rx_freq[i] + RCVR[i] * rcvr_offset[i]) / BinSize;
+
 
 	for (n = Start; n <= End; n++)
 	{
@@ -698,7 +708,7 @@ packet_t ax25_new(void)
 		 //if (new_count > delete_count + 100) {
 	if (new_count > delete_count + 256) {
 
-		Debugprintf("Report to WB2OSZ - Memory leak for packet objects.  new=%d, delete=%d\n", new_count, delete_count);
+		Debugprintf("Memory leak for packet objects.  new=%d, delete=%d\n", new_count, delete_count);
 #if AX25MEMDEBUG
 #endif
 	}
@@ -1000,7 +1010,8 @@ void multi_modem_process_rec_packet(int snd_ch, int subchan, int slice, packet_t
 
 	struct TDetector_t * pDET = &DET[emph][subchan];
 	string *  data = newString();
-	char Mode[16] = "IL2P";
+	char Mode[32] = "IL2P";
+	int Quality = 0;
 
 	sprintf(Mode, "IL2P %d", centreFreq);
 
@@ -1034,6 +1045,12 @@ void multi_modem_process_rec_packet(int snd_ch, int subchan, int slice, packet_t
 	string * xx = newString();
 	memset(xx->Data, 0, 16);
 
+	if (pskStates[snd_ch])
+	{
+		Quality = SMUpdatePhaseConstellation(snd_ch, &Phases[snd_ch][subchan][slice][0], &Mags[snd_ch][subchan][slice][0], pskStates[snd_ch], nPhases[snd_ch][subchan][slice]);
+		sprintf(Mode, "%s][Q%d", Mode, Quality);
+	}
+
 	Add(&detect_list_c[snd_ch], xx);
 	Add(&detect_list[snd_ch], data);
 
@@ -1041,6 +1058,8 @@ void multi_modem_process_rec_packet(int snd_ch, int subchan, int slice, packet_t
 //		sprintf(Mode, "IP2P-%d", retries);
 
 	stringAdd(xx, Mode, strlen(Mode));
+
+
 	return;
 
 }
@@ -2252,6 +2271,7 @@ int il2p_decode_rs(unsigned char *rec_block, int data_size, int num_parity, unsi
 	int derrlocs[FX25_MAX_CHECK];	// Half would probably be OK.
 
 	int derrors = DECODE_RS(il2p_find_rs(num_parity), rs_block, derrlocs, 0);
+
 	memcpy(out, rs_block + sizeof(rs_block) - n, data_size);
 
 	if (il2p_get_debug() >= 3) {
@@ -2749,7 +2769,6 @@ void fx_hex_dump(unsigned char *p, int len)
 
 int il2p_encode_frame(packet_t pp, int max_fec, unsigned char *iout)
 {
-
 	// Can a type 1 header be used?
 
 	unsigned char hdr[IL2P_HEADER_SIZE + IL2P_HEADER_PARITY];
@@ -2768,6 +2787,7 @@ int il2p_encode_frame(packet_t pp, int max_fec, unsigned char *iout)
 		}
 
 		// Payload is AX.25 info part.
+
 		unsigned char *pinfo;
 		int info_len;
 		info_len = ax25_get_info(pp, &pinfo);
@@ -3579,6 +3599,12 @@ int il2p_clarify_header(unsigned char *rec_hdr, unsigned char *corrected_descram
 
 	int e = il2p_decode_rs(rec_hdr, IL2P_HEADER_SIZE, IL2P_HEADER_PARITY, corrected);
 
+	if (e > 1)		// only have 2 rs bytes so can only detect 1 error
+	{
+		Debugprintf("Header correction seems ok but errors > 1");
+		return -1;
+	}
+
 	il2p_descramble_block(corrected, corrected_descrambled_hdr, IL2P_HEADER_SIZE);
 
 	return (e);
@@ -3853,38 +3879,7 @@ int il2p_decode_payload(unsigned char *received, int payload_size, int max_fec, 
 
 // end il2p_payload.c
 
-
-
-struct il2p_context_s {
-
-	enum { IL2P_SEARCHING = 0, IL2P_HEADER, IL2P_PAYLOAD, IL2P_DECODE } state;
-
-	unsigned int acc;	// Accumulate most recent 24 bits for sync word matching.
-				// Lower 8 bits are also used for accumulating bytes for
-				// the header and payload.
-
-	int bc;			// Bit counter so we know when a complete byte has been accumulated.
-
-	int polarity;		// 1 if opposite of expected polarity.
-
-	unsigned char shdr[IL2P_HEADER_SIZE + IL2P_HEADER_PARITY];
-	// Scrambled header as received over the radio.  Includes parity.
-	int hc;			// Number if bytes placed in above.
-
-	unsigned char uhdr[IL2P_HEADER_SIZE];  // Header after FEC and unscrambling.
-
-	int eplen;		// Encoded payload length.  This is not the nuumber from
-				// from the header but rather the number of encoded bytes to gather.
-
-	unsigned char spayload[IL2P_MAX_ENCODED_PAYLOAD_SIZE];
-	// Scrambled and encoded payload as received over the radio.
-	int pc;			// Number of bytes placed in above.
-
-	int corrected;		// Number of symbols corrected by RS FEC.
-};
-
-static struct il2p_context_s *il2p_context[MAX_CHANS][MAX_SUBCHANS][MAX_SLICERS];
-
+struct il2p_context_s *il2p_context[4][16][3];
 
 
 /***********************************************************************************
@@ -3944,7 +3939,8 @@ void il2p_rec_bit(int chan, int subchan, int slice, int dbit)
 			F->state = IL2P_HEADER;
 			F->bc = 0;
 			F->hc = 0;
-		
+			nPhases[chan][subchan][slice] = 0;
+
 			// Determine Centre Freq
 			
 			centreFreq[chan] = GuessCentreFreq(chan);
@@ -3958,6 +3954,7 @@ void il2p_rec_bit(int chan, int subchan, int slice, int dbit)
 			F->bc = 0;
 			F->hc = 0;
 			centreFreq[chan] = GuessCentreFreq(chan);
+			nPhases[chan][subchan][slice] = 0;
 		}
 			
 		break;
@@ -4001,6 +3998,12 @@ void il2p_rec_bit(int chan, int subchan, int slice, int dbit)
 							plprop.large_block_count, plprop.large_block_size, plprop.parity_symbols_per_block);
 					}
 
+					if (len > 340)
+					{
+						Debugprintf("Packet too big for QtSM");
+		//				F->state = IL2P_SEARCHING;
+		//				return;
+					}
 					if (F->eplen >= 1) {		// Need to gather payload.
 						F->pc = 0;
 						F->state = IL2P_PAYLOAD;
@@ -4273,12 +4276,12 @@ string * il2p_send_frame(int chan, packet_t pp, int max_fec, int polarity)
 	int preamblecount;
 	unsigned char preamble[1024];
 
-
 	encoded[0] = (IL2P_SYNC_WORD >> 16) & 0xff;
 	encoded[1] = (IL2P_SYNC_WORD >> 8) & 0xff;
 	encoded[2] = (IL2P_SYNC_WORD) & 0xff;
 
 	int elen = il2p_encode_frame(pp, max_fec, encoded + IL2P_SYNC_WORD_SIZE);
+
 	if (elen <= 0) {
 		Debugprintf("IL2P: Unable to encode frame into IL2P.\n");
 		return (packet);
@@ -4297,14 +4300,27 @@ string * il2p_send_frame(int chan, packet_t pp, int max_fec, int polarity)
 
 	// Try using preaamble for txdelay
 
-	preamblecount = (txdelay[chan] * tx_baudrate[chan]) / 8000;		// 8 for bits, 1000 for mS
+	// Nino now uses 00 as preamble for QPSK
 
-	if (preamblecount > 1024)
-		preamblecount = 1024;
+	// We don't need txdelay between frames in one transmission
 
- 	memset(preamble, IL2P_PREAMBLE, preamblecount);
 
-	stringAdd(packet, preamble, preamblecount);
+	if (Continuation[chan] == 0)
+	{
+		preamblecount = (txdelay[chan] * tx_bitrate[chan]) / 8000;		// 8 for bits, 1000 for mS
+
+		if (preamblecount > 1024)
+			preamblecount = 1024;
+
+		if (pskStates[chan])		// PSK Modes
+			memset(preamble, 01, preamblecount);
+		else
+			memset(preamble, IL2P_PREAMBLE, preamblecount);
+
+		stringAdd(packet, preamble, preamblecount);
+		Continuation[chan] = 1;
+	}
+
 	stringAdd(packet, encoded, elen);
 
 	tx_fx25_size[chan] = packet->Length * 8;
@@ -4347,7 +4363,6 @@ string * fill_il2p_data(int snd_ch, string * data)
 	string * result;
 	packet_t pp = ax25_new();
 	
-
 	// Call il2p_send_frame to build the bit stream
 
 	pp->frame_len = data->Length - 2;					// Included CRC

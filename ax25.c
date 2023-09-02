@@ -1491,6 +1491,7 @@ boolean is_correct_path(Byte * path, Byte pid)
 void get_exclude_list(char * line, TStringList * list)
 {
 	// Convert comma separated list of calls to ax25 format in list
+	// Convert to 6 chars - SSID is ignored
 
 	string axcall;
 
@@ -1504,7 +1505,44 @@ void get_exclude_list(char * line, TStringList * list)
 	strcpy(copy, line);						// copy as strtok messes with it
 	strcat(copy, ",");
 
-	axcall.Length = 8;
+	axcall.Length = 6;
+	axcall.AllocatedLength = 8;
+	axcall.Data = malloc(8);
+
+	memset(axcall.Data, 0, 8);
+
+	ptr = strtok_s(copy, " ,", &Context);
+
+	while (ptr)
+	{
+		if (ConvToAX25(ptr, axcall.Data) == 0)
+			return;
+
+		axcall.Data[6] = 0;
+
+		Add(list, duplicateString(&axcall));
+
+		ptr = strtok_s(NULL, " ,", &Context);
+	}
+}
+
+void get_digi_list(char * line, TStringList * list)
+{
+	// Convert comma separated list of calls to ax25 format in list
+
+	string axcall;
+
+	char copy[512];
+
+	char * ptr, *Context;
+
+	if (line[0] == 0)
+		return;
+
+	strcpy(copy, line);						// copy as strtok messes with it
+	strcat(copy, ",");
+
+	axcall.Length = 7;
 	axcall.AllocatedLength = 8;
 	axcall.Data = malloc(8);
 
@@ -1518,7 +1556,6 @@ void get_exclude_list(char * line, TStringList * list)
 			return;
 
 		Add(list, duplicateString(&axcall));
-
 		ptr = strtok_s(NULL, " ,", &Context);
 	}
 }
@@ -1658,6 +1695,36 @@ begin
   call:=call+'-'+ssid;
 end;
 */
+
+
+
+int is_excluded_call(int snd_ch, unsigned char * path)
+{
+	string * call = newString();
+	int Excluded = FALSE;
+
+	stringAdd(call, &path[7], 6);
+	
+	if (list_exclude_callsigns[snd_ch].Count > 0)
+		if (my_indexof(&list_exclude_callsigns[snd_ch], call) > -1)
+			Excluded = TRUE;
+	
+	freeString(call);
+	return Excluded;
+}
+
+
+int  is_excluded_frm(int snd_ch, int f_id, string * data)
+{
+	if (f_id == U_UI)
+		if (data->Length > 0)
+			if (my_indexof(&list_exclude_APRS_frm[snd_ch], data) >= 0)
+				return TRUE;
+
+	return FALSE;
+}
+
+
 
 int number_digi(string path)
 {
@@ -1926,7 +1993,7 @@ void ax25_init()
 		initTStringList(&list_digi_callsigns[i]);
 		initTStringList(&KISS_acked[i]);
 
-		get_exclude_list(MyDigiCall[i], &list_digi_callsigns[i]);
+		get_digi_list(MyDigiCall[i], &list_digi_callsigns[i]);
 		get_exclude_list(exclude_callsigns[i], &list_exclude_callsigns[i]);
 		get_exclude_frm(exclude_APRS_frm[i], &list_exclude_APRS_frm[i]);
 

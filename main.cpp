@@ -67,7 +67,7 @@ int main(int argc, char *argv[])
 		w = new QtSoundModem();
 
 		char Title[128];
-		sprintf(Title, "QtSoundModem Version %s Ports %d/%d", VersionString, AGWPort, KISSPort);
+		sprintf(Title, "QtSoundModem Version %s Ports %d%s/%d%s", VersionString, AGWPort, AGWServ ? "*" : "", KISSPort, KISSServ ? "*" : "");
 		w->setWindowTitle(Title);
 
 		w->show();
