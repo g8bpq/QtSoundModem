@@ -64,6 +64,8 @@ signals:
 	void sendtoTrace(char *, int);
 	void sendtoKISS(void *, unsigned char *, int);
 	void openSockets();
+	void startCWIDTimer();
+
 
 private:
 	void run();

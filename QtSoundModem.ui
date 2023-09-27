@@ -215,26 +215,13 @@
      <number>10</number>
     </property>
    </widget>
-   <widget class="QCheckBox" name="holdPointers">
-    <property name="geometry">
-     <rect>
-      <x>782</x>
-      <y>6</y>
-      <width>93</width>
-      <height>22</height>
-     </rect>
-    </property>
-    <property name="text">
-     <string>Hold Pointers</string>
-    </property>
-   </widget>
    <widget class="QLabel" name="HeaderA">
     <property name="geometry">
      <rect>
       <x>25</x>
       <y>460</y>
       <width>1076</width>
-      <height>30</height>
+      <height>38</height>
      </rect>
     </property>
     <property name="minimumSize">
@@ -270,7 +257,7 @@
       <x>10</x>
       <y>560</y>
       <width>1076</width>
-      <height>30</height>
+      <height>38</height>
      </rect>
     </property>
     <property name="minimumSize">
@@ -494,6 +481,49 @@
     </property>
     <property name="alignment">
      <set>Qt::AlignCenter</set>
+    </property>
+   </widget>
+   <widget class="QLabel" name="RXLevel">
+    <property name="geometry">
+     <rect>
+      <x>780</x>
+      <y>17</y>
+      <width>150</width>
+      <height>12</height>
+     </rect>
+    </property>
+    <property name="frameShape">
+     <enum>QFrame::Box</enum>
+    </property>
+    <property name="frameShadow">
+     <enum>QFrame::Sunken</enum>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_7">
+    <property name="geometry">
+     <rect>
+      <x>780</x>
+      <y>0</y>
+      <width>91</width>
+      <height>16</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>8</pointsize>
+     </font>
+    </property>
+    <property name="text">
+     <string>Rcv Level:</string>
+    </property>
+    <property name="textFormat">
+     <enum>Qt::PlainText</enum>
+    </property>
+    <property name="wordWrap">
+     <bool>true</bool>
     </property>
    </widget>
   </widget>

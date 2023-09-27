@@ -31,13 +31,17 @@ public:
 	void RefreshWaterfall(int snd_ch, unsigned char * Data);
 	void initWaterfall(int chan, int state);
 	void show_grid();
+	void checkforCWID();
+
+public slots:
 
 private slots:
 
+	void CWIDTimer();
 	void doDevices();
+	void updateFont();
 	void MinimizetoTray();
 	void TrayActivated(QSystemTrayIcon::ActivationReason reason);
-	void CWIDTimer();
 	void MyTimerSlot();
 	void returnPressed();
 	void clickedSlotI(int i);
@@ -58,6 +62,7 @@ private slots:
 	void doRSIDD();
 	void handleButton(int Port, int Act);
 	void doCalibrate();
+	void RefreshSpectrum(unsigned char * Data);
 	void doAbout();
 	void doRestartWF();
 	void doupdateDCD(int, int);
@@ -69,6 +74,7 @@ private slots:
 	void menuChecked();
 	void onTEselectionChanged();
 	void clickedSlot();
+	void startCWIDTimerSlot();
 
 protected:
 	 
@@ -85,6 +91,7 @@ private:
 
 	QAction *actDevices;
 	QAction *actModems;
+	QAction *actFont;
 	QAction *actMintoTray;
 	QAction *actCalib;
 	QAction *actAbout;
@@ -92,8 +99,8 @@ private:
 	QAction *actWaterfall1;
 	QAction *actWaterfall2;
 
+signals:
 
-	void RefreshSpectrum(unsigned char * Data);
 };
 
 class myResize : public QObject

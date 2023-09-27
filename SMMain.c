@@ -54,6 +54,7 @@ unsigned short * SendtoCard(unsigned short * buf, int n);
 short * SoundInit();
 void DoTX(int Chan);
 void UDPPollReceivedSamples();
+extern void checkforCWID();
 
 
 extern int SampleNo;
@@ -139,6 +140,8 @@ void soundMain()
 	init_raduga();			// Set up waterfall colour table
 
 	initfft();
+	il2p_init(1);
+
 
 	if (nonGUIMode)
 	{
@@ -563,7 +566,7 @@ int Freq_Change(int Chan, int Freq)
 	tx_freq[Chan] = Freq;
 
 	pnt_change[Chan] = TRUE;
-	wf_pointer(soundChannel[Chan]);
+	wf_pointer(Chan);
 
 	return Freq;
 }
@@ -804,6 +807,8 @@ void DoTX(int Chan)
 		return;
 
 	// Start a new send. modulator should handle TXD etc
+
+	checkforCWID();		// See if need to start CWID timer in afteractivity mode
 
 	Debugprintf("TX Start");
 	SampleNo = 0;
@@ -1131,7 +1136,9 @@ void OpenPTTPort()
 
 void ClosePTTPort()
 {
-	CloseCOMPort(hPTTDevice);
+	if (hPTTDevice)
+		CloseCOMPort(hPTTDevice);
+	
 	hPTTDevice = 0;
 }
 void CM108_set_ptt(int PTTState)

@@ -52,11 +52,14 @@ extern "C" char CWIDMark[32];
 extern int CWIDInterval;
 extern int CWIDLeft;
 extern int CWIDRight;
-extern int CWIDType;	
+extern int CWIDType;
+extern bool afterTraffic;
 
 extern "C" int RSID_SABM[4];
 extern "C" int RSID_UI[4];
 extern "C" int RSID_SetModem[4];
+
+extern QFont Font;
 
 
 QSettings* settings = new QSettings("QtSoundModem.ini", QSettings::IniFormat);
@@ -236,7 +239,7 @@ void getSettings()
 	CWIDLeft = settings->value("Modem/CWIDLeft", 0).toInt();
 	CWIDRight = settings->value("Modem/CWIDRight", 0).toInt();
 	CWIDType = settings->value("Modem/CWIDType", 1).toInt();			// on/off
-
+	afterTraffic = settings->value("Modem/afterTraffic", false).toBool();
 
 	getAX25Params(0);
 	getAX25Params(1);
@@ -353,6 +356,10 @@ void saveSettings()
 {
 	QSettings * settings = new QSettings("QtSoundModem.ini", QSettings::IniFormat);
 
+	settings->setValue("FontFamily", Font.family());
+	settings->setValue("PointSize", Font.pointSize());
+	settings->setValue("Weight", Font.weight());
+
 	settings->setValue("PSKWindow", constellationDialog->geometry());
 	settings->setValue("Init/SoundMode", SoundMode);
 	settings->setValue("Init/UDPClientPort", UDPClientPort);
@@ -453,7 +460,8 @@ void saveSettings()
 	settings->setValue("Modem/CWIDInterval", CWIDInterval);
 	settings->setValue("Modem/CWIDLeft", CWIDLeft);
 	settings->setValue("Modem/CWIDRight", CWIDRight);
-	settings->setValue("Modem/CWIDType", CWIDType);			
+	settings->setValue("Modem/CWIDType", CWIDType);
+	settings->setValue("Modem/afterTraffic", afterTraffic);
 
 	saveAX25Params(0);
 	saveAX25Params(1);

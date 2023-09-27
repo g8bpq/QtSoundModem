@@ -4,8 +4,8 @@
 //	 My port of UZ7HO's Soundmodem
 //
 
-#define VersionString "0.0.0.67-2"
-#define VersionBytes {0, 0, 0, 67}
+#define VersionString "0.0.0.68"
+#define VersionBytes {0, 0, 0, 68}
 
 // Added FX25. 4x100 FEC and V27 not Working and disabled
 
@@ -159,6 +159,13 @@
 // .68 Monitor XID and TEST
 //	   Flag active interface in title bar
 //	   Improve header validation in il2p
+//	   Add CWID only after traffic option
+//	   Add font selection
+//	   Separate modem bandwidth indicators
+//	   Fix problems with il2p and PSK modes in nogui mode
+//	   Add signal level bar to GUI
+//	   Fix Waterfall display when using right channel only
+//	   Allow PTT device to be added 
 
 
 

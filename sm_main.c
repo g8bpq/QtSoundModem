@@ -728,7 +728,7 @@ void init_speed(int snd_ch)
 	  form1.show_freq_a;
 	  form1.show_freq_b;
 	  */
-	wf_pointer(soundChannel[snd_ch]);
+	wf_pointer(snd_ch);
 
 	CheckPSKWindows();
 }

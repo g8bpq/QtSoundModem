@@ -511,7 +511,7 @@ for (i = 0; i < 100; i++)
 
 static int min = 0, max = 0, lastlevelGUI = 0, lastlevelreport = 0;
 
-static UCHAR CurrentLevel = 0;		// Peak from current samples
+UCHAR CurrentLevel = 0;		// Peak from current samples
 
 void PollReceivedSamples()
 {
@@ -988,9 +988,7 @@ void StdinPollReceivedSamples()
 
 	if ((Now - lastlevelGUI) > 2000)	// 2 Secs
 	{
-		//			if (WaterfallActive == 0 && SpectrumActive == 0)				// Don't need to send as included in Waterfall Line
-		//				SendtoGUI('L', &CurrentLevel, 1);	// Signal Level
-
+//		RefreshLevel(CurrentLevel);	// Signal Level
 		lastlevelGUI = Now;
 
 		if ((Now - lastlevelreport) > 10000)	// 10 Secs

@@ -46,7 +46,7 @@ along with QtSoundModem.  If not, see http://www.gnu.org/licenses
 #include <qevent.h>
 #include <QStandardItemModel>
 #include <QScrollBar>
-
+#include <QFontDialog>
 #include "UZ7HOStuff.h"
 
 
@@ -61,11 +61,13 @@ QImage *RXLevel;
 
 QLabel *WaterfallCopy[2];
 QLabel *HeaderCopy[2];
+QLabel * RXLevelCopy;
 
 QTextEdit * monWindowCopy;
 
 extern workerThread *t;
 extern QtSoundModem * w;
+extern QCoreApplication * a;
 
 QList<QSerialPortInfo> Ports = QSerialPortInfo::availablePorts();
 
@@ -148,6 +150,8 @@ int CWIDInterval = 0;
 int CWIDLeft = 0;
 int CWIDRight = 0;
 int CWIDType = 1;			// on/off
+bool afterTraffic = 0;
+bool cwidtimerisActive = false;
 
 int WaterfallMin = 00;
 int WaterfallMax = 6000;
@@ -205,6 +209,8 @@ extern "C" int TXPort;
 extern char UDPHost[64];
 
 QTimer *cwidtimer;
+QWidget * mythis;
+
 
 QSystemTrayIcon * trayIcon = nullptr;
 
@@ -379,22 +385,22 @@ void QtSoundModem::resizeEvent(QResizeEvent* event)
 
 	if (UsingBothChannels)
 	{
-		ui.HeaderA->setGeometry(QRect(0, A, W, 35));
-		ui.WaterfallA->setGeometry(QRect(0, A + 35, W, 80));
-		ui.HeaderB->setGeometry(QRect(0, B, W, 35));
-		ui.WaterfallB->setGeometry(QRect(0, B + 35, W, 80));
+		ui.HeaderA->setGeometry(QRect(0, A, W, 38));
+		ui.WaterfallA->setGeometry(QRect(0, A + 38, W, 80));
+		ui.HeaderB->setGeometry(QRect(0, B, W, 38));
+		ui.WaterfallB->setGeometry(QRect(0, B + 38, W, 80));
 	}
 	else
 	{
 		if (soundChannel[0] == RIGHT)
 		{
-			ui.HeaderB->setGeometry(QRect(0, A, W, 35));
-			ui.WaterfallB->setGeometry(QRect(0, A + 35, W, 80));
+			ui.HeaderB->setGeometry(QRect(0, A, W, 38));
+			ui.WaterfallB->setGeometry(QRect(0, A + 38, W, 80));
 		}
 		else
 		{
-			ui.HeaderA->setGeometry(QRect(0, A, W, 35));
-			ui.WaterfallA->setGeometry(QRect(0, A + 35, W, 80));
+			ui.HeaderA->setGeometry(QRect(0, A, W, 38));
+			ui.WaterfallA->setGeometry(QRect(0, A + 38, W, 80));
 		}
 	}
 }
@@ -456,7 +462,6 @@ void QtSoundModem::initWaterfall(int chan, int state)
 		}
 		Waterfall[chan] = new QImage(1024, 80, QImage::Format_RGB32);
 		Waterfall[chan]->fill(black);
-
 	}
 	else
 	{
@@ -479,6 +484,8 @@ QLabel * QualLabel[4];
 
 QLabel *RXOffsetLabel;
 QSlider *RXOffset;
+
+QFont Font;
 
 extern "C" void CheckPSKWindows()
 {
@@ -515,9 +522,25 @@ void DoPSKWindows()
 
 QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 {
+	QString family;
+	int csize;
+	QFont::Weight weight;
+
 	ui.setupUi(this);
- 
+
+	mythis = this;
+
 	QSettings mysettings("QtSoundModem.ini", QSettings::IniFormat);
+
+	family = mysettings.value("FontFamily", "Courier New").toString();
+	csize = mysettings.value("PointSize", 0).toInt();
+	weight = (QFont::Weight)mysettings.value("Weight", 50).toInt();
+
+	Font = QFont(family);
+	Font.setPointSize(csize);
+	Font.setWeight(weight);
+
+	QApplication::setFont(Font);
 
 	constellationDialog = new QDialog(nullptr, Qt::WindowTitleHint | Qt::WindowSystemMenuHint);
 	constellationDialog->resize(488, 140);
@@ -625,6 +648,12 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 
 	connect(actModems, SIGNAL(triggered()), this, SLOT(clickedSlot()));
 
+	actFont = new QAction("Setup Font", this);
+	actFont->setObjectName("actFont");
+	setupMenu->addAction(actFont);
+
+	connect(actFont, SIGNAL(triggered()), this, SLOT(clickedSlot()));
+
 	actMintoTray = setupMenu->addAction("Minimize to Tray", this, SLOT(MinimizetoTray()));
 	actMintoTray->setCheckable(1);
 	actMintoTray->setChecked(MintoTray);
@@ -643,11 +672,13 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 	actAbout = ui.menuBar->addAction("&About");
 	connect(actAbout, SIGNAL(triggered()), this, SLOT(doAbout()));
 
-	//	Constellation = new QImage(91, 91, QImage::Format_RGB32);
-
-	Header[0] = new QImage(1024, 35, QImage::Format_RGB32);
-	Header[1] = new QImage(1024, 35, QImage::Format_RGB32);
+	Header[0] = new QImage(1024, 38, QImage::Format_RGB32);
+	Header[1] = new QImage(1024, 38, QImage::Format_RGB32);
 	RXLevel = new QImage(150, 10, QImage::Format_RGB32);
+	RXLevel->fill(white);
+	ui.RXLevel->setPixmap(QPixmap::fromImage(*RXLevel));
+	RXLevelCopy = ui.RXLevel;
+
 
 	DCDLabel[0] = new QLabel(this);
 	DCDLabel[0]->setObjectName(QString::fromUtf8("DCDLedA"));
@@ -725,9 +756,6 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 	wf_Scale(0);
 	wf_Scale(1);
 
-	//	RefreshLevel(0);
-	//	RXLevel->setPixmap(QPixmap::fromImage(*RXLevel));
-
 	connect(ui.modeA, SIGNAL(currentIndexChanged(int)), this, SLOT(clickedSlotI(int)));
 	connect(ui.modeB, SIGNAL(currentIndexChanged(int)), this, SLOT(clickedSlotI(int)));
 	connect(ui.modeC, SIGNAL(currentIndexChanged(int)), this, SLOT(clickedSlotI(int)));
@@ -769,9 +797,10 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 	connect(ui.DCDSlider, SIGNAL(sliderMoved(int)), this, SLOT(clickedSlotI(int)));
 	connect(ui.RXOffset, SIGNAL(valueChanged(int)), this, SLOT(clickedSlotI(int)));
 
-
 	QObject::connect(t, SIGNAL(sendtoTrace(char *, int)), this, SLOT(sendtoTrace(char *, int)), Qt::QueuedConnection);
 	QObject::connect(t, SIGNAL(updateDCD(int, int)), this, SLOT(doupdateDCD(int, int)), Qt::QueuedConnection);
+
+	QObject::connect(t, SIGNAL(startCWIDTimer()), this, SLOT(startCWIDTimerSlot()), Qt::QueuedConnection);
 
 	connect(ui.RXOffsetA, SIGNAL(returnPressed()), this, SLOT(returnPressed()));
 	connect(ui.RXOffsetB, SIGNAL(returnPressed()), this, SLOT(returnPressed()));
@@ -786,11 +815,11 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 	connect(wftimer, SIGNAL(timeout()), this, SLOT(doRestartWF()));
 	wftimer->start(1000 * 300);
 
-	
 	cwidtimer = new QTimer(this);
 	connect(cwidtimer, SIGNAL(timeout()), this, SLOT(CWIDTimer()));
 
-	if (CWIDInterval)
+
+	if (CWIDInterval && afterTraffic == false)
 		cwidtimer->start(CWIDInterval * 60000);
 
 	if (RSID_SetModem[0])
@@ -798,7 +827,15 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 		RSID_WF = 1;
 		RSIDinitfft();
 	}
-	il2p_init(1);
+//	il2p_init(1);
+
+	QTimer::singleShot(200, this, &QtSoundModem::updateFont);
+
+}
+
+void QtSoundModem::updateFont()
+{
+	QApplication::setFont(Font);
 }
 
 void QtSoundModem::MinimizetoTray()
@@ -821,8 +858,23 @@ void QtSoundModem::TrayActivated(QSystemTrayIcon::ActivationReason reason)
 
 extern "C" void sendCWID(char * strID, BOOL blnPlay, int Chan);
 
+extern "C" void checkforCWID()
+{
+	emit(t->startCWIDTimer());
+};
+
+extern "C" void QtSoundModem::startCWIDTimerSlot()
+{
+	if (CWIDInterval && afterTraffic == 1 && cwidtimerisActive == false)
+	{
+		cwidtimerisActive = true;
+		QTimer::singleShot(CWIDInterval * 60000, this, &QtSoundModem::CWIDTimer);
+	}
+}
+
 void QtSoundModem::CWIDTimer()
 {
+	cwidtimerisActive = false;
 	sendCWID(CWIDCall, CWIDType, 0);
 	calib_mode[0] = 4;
 }
@@ -1061,7 +1113,6 @@ void QtSoundModem::clickedSlotI(int i)
 		return;
 	}
 
-
 	QMessageBox msgBox;
 	msgBox.setWindowTitle("MessageBox Title");
 	msgBox.setText("You Clicked " + ((QPushButton*)sender())->objectName());
@@ -1218,6 +1269,27 @@ void QtSoundModem::clickedSlot()
 	if (strcmp(Name, "Stop_D") == 0)
 	{
 		handleButton(3, 0);
+		return;
+	}
+
+	if (strcmp(Name, "actFont") == 0)
+	{
+		bool ok;
+		Font = QFontDialog::getFont(&ok, QFont(Font, this));
+		if (ok)
+		{
+			// the user clicked OK and font is set to the font the user selected
+			QApplication::setFont(Font);
+			saveSettings();
+		}
+		else
+		{
+			// the user canceled the dialog; font is set to the initial
+			// value, in this case Helvetica [Cronyx], 10
+
+			QApplication::setFont(Font);
+
+		}
 		return;
 	}
 
@@ -1416,6 +1488,8 @@ void QtSoundModem::doModems()
 		Dlg->radioButton_2->setChecked(1);
 	else
 		Dlg->CWIDType->setChecked(1);
+
+	Dlg->afterTraffic->setChecked(afterTraffic);
 
 	Dlg->RSIDSABM_A->setChecked(RSID_SABM[0]);
 	Dlg->RSIDSABM_B->setChecked(RSID_SABM[1]);
@@ -1635,7 +1709,9 @@ void QtSoundModem::modemSave()
 	CWIDInterval = Dlg->CWIDInterval->text().toInt();
 	CWIDType = Dlg->radioButton_2->isChecked();
 
-	if (CWIDInterval)
+	afterTraffic = Dlg->afterTraffic->isChecked();
+
+	if (CWIDInterval && afterTraffic == false)
 		cwidtimer->start(CWIDInterval * 60000);
 	else
 		cwidtimer->stop();
@@ -1677,6 +1753,19 @@ void QtSoundModem::modemSave()
 		get_exclude_list(MyDigiCall[i], &list_digi_callsigns[i]);
 	}
 
+/*
+	Q = Dlg->LPFWidthA->text();
+	lpf[0] = Q.toInt();
+
+	Q = Dlg->LPFWidthB->text();
+	lpf[1] = Q.toInt();
+
+	Q = Dlg->LPFWidthC->text();
+	lpf[2] = Q.toInt();
+
+	Q = Dlg->LPFWidthD->text();
+	lpf[3] = Q.toInt();
+*/
 }
 
 void QtSoundModem::modemreject()
@@ -2030,7 +2119,19 @@ void QtSoundModem::doDevices()
 		Dev->PTTPort->addItem(info);
 	}
 
-	Dev->PTTPort->setCurrentIndex(Dev->PTTPort->findText(PTTPort, Qt::MatchFixedString));
+	// If we are using a user specifed device add it
+
+	i = Dev->PTTPort->findText(PTTPort, Qt::MatchFixedString);
+
+	if (i == -1)
+	{
+		// Add our device to list
+
+		Dev->PTTPort->insertItem(0, PTTPort);
+		i = Dev->PTTPort->findText(PTTPort, Qt::MatchContains);
+	}
+
+	Dev->PTTPort->setCurrentIndex(i);
 
 	PTTPortChanged(0);				// Force reevaluation
 
@@ -2163,7 +2264,13 @@ void QtSoundModem::deviceaccept()
 	AGWPort = Q.toInt();
 
 	Q = Dev->PTTPort->currentText();
-	strcpy(PTTPort, Q.toString().toUtf8());
+	
+	char temp[256];
+
+	strcpy(temp, Q.toString().toUtf8());
+
+	if (strlen(temp))
+		strcpy(PTTPort, temp);
 
 	DualPTT = Dev->DualPTT->isChecked();
 	TX_rotate = Dev->txRotation->isChecked();
@@ -2312,6 +2419,20 @@ void QtSoundModem::doRestartWF()
 		initWaterfall(1, 0);
 		initWaterfall(1, 1);
 	}
+
+	delete(RXLevel);
+	delete(ui.RXLevel);
+	ui.RXLevel = new QLabel(ui.centralWidget);
+	RXLevelCopy = ui.RXLevel;
+	ui.RXLevel->setGeometry(QRect(780, 17, 150, 12));
+//	ui.RXLevel->setFrameShape(QFrame::Box);
+//	ui.RXLevel->setFrameShadow(QFrame::Sunken);
+
+	RXLevel = new QImage(150, 10, QImage::Format_RGB32);
+	RXLevel->fill(cyan);
+//	ui.RXLevel->setPixmap(QPixmap::fromImage(*RXLevel));
+
+	ui.RXLevel->setVisible(1);
 }
 
 
@@ -2398,6 +2519,34 @@ void QtSoundModem::RefreshSpectrum(unsigned char * Data)
 	ui.WaterfallA->setPixmap(QPixmap::fromImage(*Waterfall[0]));
 
 }
+
+void RefreshLevel(unsigned int Level)
+{
+	// Redraw the RX Level Bar Graph
+
+	unsigned int  x, y;
+
+	for (x = 0; x < 150; x++)
+	{
+		for (y = 0; y < 10; y++)
+		{
+			if (x < Level)
+			{
+				if (Level < 50)
+					RXLevel->setPixel(x, y, yellow);
+				else if (Level > 135)
+					RXLevel->setPixel(x, y, red);
+				else
+					RXLevel->setPixel(x, y, green);
+			}
+			else
+				RXLevel->setPixel(x, y, white);
+		}
+	}
+	RXLevelCopy->setPixmap(QPixmap::fromImage(*RXLevel));
+}
+
+extern "C" unsigned char CurrentLevel;
 
 void QtSoundModem::RefreshWaterfall(int snd_ch, unsigned char * Data)
 {
@@ -2584,7 +2733,7 @@ void do_pointer(int waterfall)
 	// We drew markers every 100 Hz or 100 / binsize pixels
 
 	float PixelsPerHz = 1.0 / BinSize;
-	k = 28;
+	k = 26;
 
 	// draw all enabled ports on the ports on this soundcard
 
@@ -2632,6 +2781,8 @@ void do_pointer(int waterfall)
 			qPainter.drawLine(pos3, k - 3, pos3, k + 3);
 			qPainter.drawLine(pos3 - 2, k - 3, pos3 + 2, k - 3);
 		}
+
+		k += 3;
 	}
 	HeaderCopy[waterfall]->setPixmap(QPixmap::fromImage(*bm));
 }
@@ -2696,6 +2847,10 @@ extern "C" void SMUpdateBusyDetector(int LR, float * Real, float *Imag);
 void doWaterfallThread(void * param)
 {
 	int snd_ch = (int)(size_t)param;
+	int WaterfallNumber = snd_ch;
+
+	if (snd_ch == 1 && UsingLeft == 0)	// Only using right
+		snd_ch = 0;						// Samples are in first buffer
 
 	QImage * bm = Waterfall[snd_ch];
 	
@@ -2712,6 +2867,7 @@ void doWaterfallThread(void * param)
 
 	if (Configuring)
 		return;
+
 
 	hFFTSize = FFTSize / 2;
 
@@ -2794,55 +2950,66 @@ void doWaterfallThread(void * param)
 
 	SMUpdateBusyDetector(snd_ch, RealOut, ImagOut);
 
+	RefreshLevel(CurrentLevel);	// Signal Level
+
 	if (bm == 0)
 		return;
 
-	p = Line;
-	lineLen = bm->bytesPerLine();
-
-	if (raduga == DISP_MONO)
+	try
 	{
-		for (i = Start; i < End; i++)
+
+		p = Line;
+		lineLen = bm->bytesPerLine();
+
+		if (raduga == DISP_MONO)
 		{
-			n = fft_disp[snd_ch][i];
-			*(p++) = n;					// all colours the same
-			*(p++) = n;
-			*(p++) = n;
-			p++;
+			for (i = Start; i < End; i++)
+			{
+				n = fft_disp[snd_ch][i];
+				*(p++) = n;					// all colours the same
+				*(p++) = n;
+				*(p++) = n;
+				p++;
+			}
 		}
-	}
-	else
-	{
-		for (i = Start; i < End; i++)
+		else
 		{
-			n = fft_disp[snd_ch][i];
-			memcpy(p, &RGBWF[n], 4);
-			p += 4;
+			for (i = Start; i < End; i++)
+			{
+				n = fft_disp[snd_ch][i];
+				memcpy(p, &RGBWF[n], 4);
+				p += 4;
+			}
 		}
+
+		// Scroll
+
+		int TopLine = NextWaterfallLine[snd_ch];
+
+		// Write line to cyclic buffer then draw starting with the line just written
+
+		memcpy(&WaterfallLines[snd_ch][NextWaterfallLine[snd_ch]++][0], Line, 4096);
+		if (NextWaterfallLine[snd_ch] > 79)
+			NextWaterfallLine[snd_ch] = 0;
+
+		for (int j = 79; j > 0; j--)
+		{
+			p = bm->scanLine(j);
+			memcpy(p, &WaterfallLines[snd_ch][TopLine][0], lineLen);
+			TopLine++;
+			if (TopLine > 79)
+				TopLine = 0;
+		}
+
+		WaterfallCopy[WaterfallNumber]->setPixmap(QPixmap::fromImage(*bm));
+		//	WaterfallCopy[snd_ch - 1]->setPixmap(*pm);
+			//	WaterfallCopy[1]->setPixmap(QPixmap::fromImage(*bm));
 	}
-
-	// Scroll
-
-	int TopLine = NextWaterfallLine[snd_ch];
-
-	// Write line to cyclic buffer then draw starting with the line just written
-
-	memcpy(&WaterfallLines[snd_ch][NextWaterfallLine[snd_ch]++][0], Line, 4096);
-	if (NextWaterfallLine[snd_ch] > 79)
-		NextWaterfallLine[snd_ch] = 0;
-
-	for (int j = 79; j > 0; j--)
+	catch (const std::exception& e) // caught by reference to base
 	{
-		p = bm->scanLine(j);
-		memcpy(p, &WaterfallLines[snd_ch][TopLine][0], lineLen);
-		TopLine++;
-		if (TopLine > 79)
-			TopLine = 0;
+		qDebug() << " a standard exception was caught, with message '"
+			<< e.what() << "'\n";
 	}
-
-	WaterfallCopy[snd_ch]->setPixmap(QPixmap::fromImage(*bm));
-	//	WaterfallCopy[snd_ch - 1]->setPixmap(*pm);
-		//	WaterfallCopy[1]->setPixmap(QPixmap::fromImage(*bm));
 
 }
 
@@ -3078,17 +3245,19 @@ extern "C" int SMUpdatePhaseConstellation(int chan, float * Phases, float * Mags
 	int yCenter = (ConstellationHeight - 2) / 2;
 	int xCenter = (ConstellationWidth - 2) / 2;
 
-	Constellation[chan]->fill(black);
-
-	for (i = 0; i < 120; i++)
-	{
-		Constellation[chan]->setPixel(xCenter, i, cyan);
-		Constellation[chan]->setPixel(i, xCenter, cyan);
-	}
-
 	if (Count == 0)
 		return 0;
 
+	if (nonGUIMode == 0)
+	{
+		Constellation[chan]->fill(black);
+
+		for (i = 0; i < 120; i++)
+		{
+			Constellation[chan]->setPixel(xCenter, i, cyan);
+			Constellation[chan]->setPixel(i, xCenter, cyan);
+		}
+	}
 	dbPhaseStep = 2 * M_PI / intPSKPhase;
 
 	for (i = 1; i < Count; i++)  // Don't plot the first phase (reference)
@@ -3099,7 +3268,7 @@ extern "C" int SMUpdatePhaseConstellation(int chan, float * Phases, float * Mags
 
 	dblAvgRad = dblAvgRad / Count; // the average radius
 
-	for (i = 0; i < Count; i++) 
+	for (i = 0; i < Count; i++)
 	{
 		dblRad = PLOTRADIUS * Mags[i] / MagMax; //  scale the radius dblRad based on intMag
 		intP = round((Phases[i]) / dbPhaseStep);
@@ -3109,23 +3278,28 @@ extern "C" int SMUpdatePhaseConstellation(int chan, float * Phases, float * Mags
 		dblPhaseError = fabsf(Phases[i] - intP * dbPhaseStep); // always positive and < .5 *  dblPhaseStep
 		dblPhaseErrorSum += dblPhaseError;
 
-		intX = xCenter + dblRad * cosf(dblPlotRotation + Phases[i]);
-		intY = yCenter + dblRad * sinf(dblPlotRotation + Phases[i]);
+		if (nonGUIMode == 0)
+		{
+			intX = xCenter + dblRad * cosf(dblPlotRotation + Phases[i]);
+			intY = yCenter + dblRad * sinf(dblPlotRotation + Phases[i]);
 
-		if (intX > 0 && intY > 0)
-			if (intX != xCenter && intY != yCenter)
-				Constellation[chan]->setPixel(intX, intY, yellow);
+			if (intX > 0 && intY > 0)
+				if (intX != xCenter && intY != yCenter)
+					Constellation[chan]->setPixel(intX, intY, yellow);
+		}
 	}
 
 	dblAvgRad = dblAvgRad / Count; // the average radius
 
 	intQuality = MAX(0, ((100 - 200 * (dblPhaseErrorSum / (Count)) / dbPhaseStep))); // ignore radius error for (PSK) but include for QAM
 
-	char QualText[64];
-	sprintf(QualText, "Chan %c Qual = %d", chan + 'A', intQuality);
-	QualLabel[chan]->setText(QualText);
-	constellationLabel[chan]->setPixmap(QPixmap::fromImage(*Constellation[chan]));
-//	constellationDialog[chan]->setWindowTitle(QualText);
+	if (nonGUIMode == 0)
+	{
+		char QualText[64];
+		sprintf(QualText, "Chan %c Qual = %d", chan + 'A', intQuality);
+		QualLabel[chan]->setText(QualText);
+		constellationLabel[chan]->setPixmap(QPixmap::fromImage(*Constellation[chan]));
+	}
 	return intQuality;
 }
 

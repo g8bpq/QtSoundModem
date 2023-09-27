@@ -4001,8 +4001,8 @@ void il2p_rec_bit(int chan, int subchan, int slice, int dbit)
 					if (len > 340)
 					{
 						Debugprintf("Packet too big for QtSM");
-		//				F->state = IL2P_SEARCHING;
-		//				return;
+						F->state = IL2P_SEARCHING;
+						return;
 					}
 					if (F->eplen >= 1) {		// Need to gather payload.
 						F->pc = 0;
