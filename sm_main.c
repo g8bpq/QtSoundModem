@@ -65,10 +65,7 @@ int TXPort = 8884;
 
 BOOL Firstwaterfall = 1;
 BOOL Secondwaterfall = 1;
-
 int multiCore = FALSE;
-
-
 
 BOOL MinOnStart  =  0;
 //RS TReedSolomon;
@@ -863,6 +860,8 @@ void runModemthread(void * param)
 
 // I think this processes a buffer of samples
 
+int Toggle = 0;
+
 void BufferFull(short * Samples, int nSamples)			// These are Stereo Samples
 {
 	word i, i1, j;
@@ -1064,6 +1063,9 @@ void BufferFull(short * Samples, int nSamples)			// These are Stereo Samples
 
 		// Collect samples for both channels if needed
 
+		Toggle++;
+
+
 		Needed = FFTSize - fftCount;
 
 		if (Needed <= rx_bufsize)
@@ -1076,7 +1078,9 @@ void BufferFull(short * Samples, int nSamples)			// These are Stereo Samples
 				data1 += 2;
 			}
 
-			doWaterfall(FirstWaterfallChan);
+			if ((Toggle & 1) || (UsingBothChannels == 0))
+				doWaterfall(FirstWaterfallChan);
+	
 
 			if (data2)
 			{
@@ -1085,7 +1089,8 @@ void BufferFull(short * Samples, int nSamples)			// These are Stereo Samples
 					*ptr2++ = *data2;
 					data2 += 2;
 				}
-				doWaterfall(1);
+				if (((Toggle & 1) == 0))
+					doWaterfall(1);
 			}
 
 			remainingSamples = rx_bufsize - Needed;

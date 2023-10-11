@@ -53,12 +53,15 @@ int main(int argc, char *argv[])
 
 	qDebug() << Title;
 
+
+
 	if (nonGUIMode)
 		a = new QCoreApplication(argc, argv);
 	else
 		a = new QApplication(argc, argv);			// GUI version
 
 	getSettings();
+
 
 	t = new workerThread;
 

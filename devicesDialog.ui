@@ -151,7 +151,7 @@
        <rect>
         <x>20</x>
         <y>304</y>
-        <width>251</width>
+        <width>231</width>
         <height>17</height>
        </rect>
       </property>
@@ -580,6 +580,19 @@
       </property>
       <property name="text">
        <string>to</string>
+      </property>
+     </widget>
+     <widget class="QCheckBox" name="darkTheme">
+      <property name="geometry">
+       <rect>
+        <x>260</x>
+        <y>304</y>
+        <width>161</width>
+        <height>17</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Dark Theme</string>
       </property>
      </widget>
     </widget>

@@ -39,6 +39,7 @@ private slots:
 
 	void CWIDTimer();
 	void doDevices();
+	void mysetstyle();
 	void updateFont();
 	void MinimizetoTray();
 	void TrayActivated(QSystemTrayIcon::ActivationReason reason);

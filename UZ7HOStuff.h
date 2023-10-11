@@ -4,8 +4,8 @@
 //	 My port of UZ7HO's Soundmodem
 //
 
-#define VersionString "0.0.0.68"
-#define VersionBytes {0, 0, 0, 68}
+#define VersionString "0.0.0.69"
+#define VersionBytes {0, 0, 0, 69}
 
 // Added FX25. 4x100 FEC and V27 not Working and disabled
 
@@ -166,6 +166,11 @@
 //	   Add signal level bar to GUI
 //	   Fix Waterfall display when using right channel only
 //	   Allow PTT device to be added 
+
+// .69	Add basic Dark Theme
+//		Fix some timing bugs in Waterfall and RX Level refresh
+//		Only display session table if AGW interface is enabled
+//		Fix operation with both left and right channels in use
 
 
 

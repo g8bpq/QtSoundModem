@@ -1203,7 +1203,7 @@ void CM108_set_ptt(int PTTState)
 
 }
 
-float amplitudes[4] = { 32767, 32767, 32767, 32767 };
+float amplitudes[4] = { 32000, 32000, 32000, 32000 };
 extern float amplitude;
 
 void RadioPTT(int snd_ch, BOOL PTTState)

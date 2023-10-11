@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>962</width>
-    <height>721</height>
+    <width>993</width>
+    <height>900</height>
    </rect>
   </property>
   <property name="maximumSize">
@@ -171,9 +171,9 @@
     <property name="geometry">
      <rect>
       <x>690</x>
-      <y>0</y>
+      <y>2</y>
       <width>73</width>
-      <height>16</height>
+      <height>13</height>
      </rect>
     </property>
     <property name="text">
@@ -412,7 +412,7 @@
       <x>600</x>
       <y>2</y>
       <width>87</width>
-      <height>16</height>
+      <height>13</height>
      </rect>
     </property>
     <property name="text">
@@ -487,9 +487,9 @@
     <property name="geometry">
      <rect>
       <x>780</x>
-      <y>17</y>
+      <y>14</y>
       <width>150</width>
-      <height>12</height>
+      <height>11</height>
      </rect>
     </property>
     <property name="frameShape">
@@ -508,7 +508,7 @@
       <x>780</x>
       <y>0</y>
       <width>91</width>
-      <height>16</height>
+      <height>13</height>
      </rect>
     </property>
     <property name="font">
@@ -526,13 +526,32 @@
      <bool>true</bool>
     </property>
    </widget>
+   <widget class="QLabel" name="RXLevel2">
+    <property name="geometry">
+     <rect>
+      <x>780</x>
+      <y>23</y>
+      <width>150</width>
+      <height>11</height>
+     </rect>
+    </property>
+    <property name="frameShape">
+     <enum>QFrame::Box</enum>
+    </property>
+    <property name="frameShadow">
+     <enum>QFrame::Sunken</enum>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+   </widget>
   </widget>
   <widget class="QMenuBar" name="menuBar">
    <property name="geometry">
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>962</width>
+     <width>993</width>
      <height>21</height>
     </rect>
    </property>
