@@ -29,7 +29,7 @@ public:
 	~QtSoundModem();
 
 	void RefreshWaterfall(int snd_ch, unsigned char * Data);
-	void initWaterfall(int chan, int state);
+	void initWaterfall(int state);
 	void show_grid();
 	void checkforCWID();
 
@@ -111,4 +111,10 @@ class myResize : public QObject
 protected:
 	bool eventFilter(QObject *obj, QEvent *event) override;
 };
+
+
+#define WaterfallDisplayPixels 80
+#define WaterfallHeaderPixels 38
+#define WaterfallTotalPixels WaterfallDisplayPixels + WaterfallHeaderPixels
+#define WaterfallImageHeight (WaterfallTotalPixels + WaterfallTotalPixels)
 

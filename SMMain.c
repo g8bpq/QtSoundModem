@@ -32,6 +32,8 @@ along with QtSoundModem.  If not, see http://www.gnu.org/licenses
 BOOL KISSServ;
 int KISSPort;
 
+int NeedWaterfallHeaders = 0;
+
 BOOL AGWServ;
 int AGWPort;
 
@@ -566,7 +568,7 @@ int Freq_Change(int Chan, int Freq)
 	tx_freq[Chan] = Freq;
 
 	pnt_change[Chan] = TRUE;
-	wf_pointer(Chan);
+	NeedWaterfallHeaders = TRUE;
 
 	return Freq;
 }

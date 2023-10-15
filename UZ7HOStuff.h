@@ -4,8 +4,8 @@
 //	 My port of UZ7HO's Soundmodem
 //
 
-#define VersionString "0.0.0.69"
-#define VersionBytes {0, 0, 0, 69}
+#define VersionString "0.0.0.70"
+#define VersionBytes {0, 0, 0, 70}
 
 // Added FX25. 4x100 FEC and V27 not Working and disabled
 
@@ -171,6 +171,8 @@
 //		Fix some timing bugs in Waterfall and RX Level refresh
 //		Only display session table if AGW interface is enabled
 //		Fix operation with both left and right channels in use
+
+// .70  Restructure Waterfall area to be a single image 
 
 
 
@@ -1129,6 +1131,7 @@ struct il2p_context_s {
 	int corrected;		// Number of symbols corrected by RS FEC.
 };
 
+extern int NeedWaterfallHeaders;
 
 #ifdef __cplusplus
 }

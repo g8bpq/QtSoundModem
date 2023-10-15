@@ -27,7 +27,6 @@ void make_core_BPF(UCHAR snd_ch, short freq, short width);
 void make_core_TXBPF(UCHAR snd_ch, float freq, float width);
 void make_core_INTR(UCHAR snd_ch);
 void make_core_LPF(UCHAR snd_ch, short width);
-void wf_pointer(int snd_ch);
 void dw9600ProcessSample(int snd_ch, short Sample);
 void init_RUH48(int snd_ch);
 void init_RUH96(int snd_ch);
@@ -725,7 +724,7 @@ void init_speed(int snd_ch)
 	  form1.show_freq_a;
 	  form1.show_freq_b;
 	  */
-	wf_pointer(snd_ch);
+	NeedWaterfallHeaders = TRUE;
 
 	CheckPSKWindows();
 }
@@ -1065,7 +1064,6 @@ void BufferFull(short * Samples, int nSamples)			// These are Stereo Samples
 
 		Toggle++;
 
-
 		Needed = FFTSize - fftCount;
 
 		if (Needed <= rx_bufsize)
@@ -1080,7 +1078,6 @@ void BufferFull(short * Samples, int nSamples)			// These are Stereo Samples
 
 			if ((Toggle & 1) || (UsingBothChannels == 0))
 				doWaterfall(FirstWaterfallChan);
-	
 
 			if (data2)
 			{
@@ -1092,6 +1089,9 @@ void BufferFull(short * Samples, int nSamples)			// These are Stereo Samples
 				if (((Toggle & 1) == 0))
 					doWaterfall(1);
 			}
+
+			if (Firstwaterfall || Secondwaterfall)
+				displayWaterfall();
 
 			remainingSamples = rx_bufsize - Needed;
 			fftCount = 0;

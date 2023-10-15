@@ -50,48 +50,6 @@
      </rect>
     </property>
    </widget>
-   <widget class="QLabel" name="WaterfallB">
-    <property name="geometry">
-     <rect>
-      <x>0</x>
-      <y>586</y>
-      <width>959</width>
-      <height>80</height>
-     </rect>
-    </property>
-    <property name="sizePolicy">
-     <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
-      <horstretch>0</horstretch>
-      <verstretch>0</verstretch>
-     </sizepolicy>
-    </property>
-    <property name="minimumSize">
-     <size>
-      <width>600</width>
-      <height>80</height>
-     </size>
-    </property>
-    <property name="maximumSize">
-     <size>
-      <width>5000</width>
-      <height>100</height>
-     </size>
-    </property>
-    <property name="font">
-     <font>
-      <pointsize>8</pointsize>
-     </font>
-    </property>
-    <property name="frameShape">
-     <enum>QFrame::Box</enum>
-    </property>
-    <property name="frameShadow">
-     <enum>QFrame::Plain</enum>
-    </property>
-    <property name="text">
-     <string>Waterfall</string>
-    </property>
-   </widget>
    <widget class="QLabel" name="label_2">
     <property name="geometry">
      <rect>
@@ -121,25 +79,25 @@
      <number>1500</number>
     </property>
    </widget>
-   <widget class="QLabel" name="WaterfallA">
+   <widget class="QLabel" name="Waterfall">
     <property name="geometry">
      <rect>
       <x>80</x>
       <y>488</y>
       <width>881</width>
-      <height>80</height>
+      <height>100</height>
      </rect>
     </property>
     <property name="minimumSize">
      <size>
       <width>600</width>
-      <height>80</height>
+      <height>100</height>
      </size>
     </property>
     <property name="maximumSize">
      <size>
       <width>5000</width>
-      <height>100</height>
+      <height>250</height>
      </size>
     </property>
     <property name="font">
@@ -213,78 +171,6 @@
     </property>
     <property name="tickInterval">
      <number>10</number>
-    </property>
-   </widget>
-   <widget class="QLabel" name="HeaderA">
-    <property name="geometry">
-     <rect>
-      <x>25</x>
-      <y>460</y>
-      <width>1076</width>
-      <height>38</height>
-     </rect>
-    </property>
-    <property name="minimumSize">
-     <size>
-      <width>600</width>
-      <height>10</height>
-     </size>
-    </property>
-    <property name="maximumSize">
-     <size>
-      <width>5000</width>
-      <height>100</height>
-     </size>
-    </property>
-    <property name="font">
-     <font>
-      <pointsize>8</pointsize>
-     </font>
-    </property>
-    <property name="frameShape">
-     <enum>QFrame::Box</enum>
-    </property>
-    <property name="frameShadow">
-     <enum>QFrame::Plain</enum>
-    </property>
-    <property name="text">
-     <string>Waterfall</string>
-    </property>
-   </widget>
-   <widget class="QLabel" name="HeaderB">
-    <property name="geometry">
-     <rect>
-      <x>10</x>
-      <y>560</y>
-      <width>1076</width>
-      <height>38</height>
-     </rect>
-    </property>
-    <property name="minimumSize">
-     <size>
-      <width>600</width>
-      <height>10</height>
-     </size>
-    </property>
-    <property name="maximumSize">
-     <size>
-      <width>5000</width>
-      <height>100</height>
-     </size>
-    </property>
-    <property name="font">
-     <font>
-      <pointsize>8</pointsize>
-     </font>
-    </property>
-    <property name="frameShape">
-     <enum>QFrame::Box</enum>
-    </property>
-    <property name="frameShadow">
-     <enum>QFrame::Plain</enum>
-    </property>
-    <property name="text">
-     <string>Waterfall</string>
     </property>
    </widget>
    <widget class="QTextEdit" name="monWindow">
