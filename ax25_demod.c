@@ -142,6 +142,7 @@ short active_rx_freq[5] = { 1700, 1700,1700,1700,1700 };
  
 int fx25_mode[4] = { 0, 0, 0, 0 };
 int il2p_mode[4] = { 0, 0, 0, 0 };
+int il2p_crc[4] = { 0, 0, 0, 0 };
 
 int pnt_change[5] = { 0 };
 float src_buf[5][2048];

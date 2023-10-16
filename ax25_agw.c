@@ -515,12 +515,14 @@ void on_AGW_Gs_frame(AGWUser * AGW, struct AGWHeader * Frame, Byte * Data)
 {
 	// QTSM with a data field is used by QtSM to set/read Modem Params
 
-	Byte info[44] = { 0, 255, 24, 3, 100, 15, 6, 0, 1, 0, 0, 0 }; //QTSM Signature
+	Byte info[48] = { 0, 255, 24, 3, 100, 15, 6, 0, 1, 0, 0, 0 }; //QTSM Signature
 	int Len = 12;
 
 	if (Frame->DataLength == 32)
 	{
 		// BPQ to QTSM private Format. 
+
+		// First 4 Freq, 4 to 24 Modem, rest was spare. Use 27-31 for modem control flags (fx.25 il2p etc)
 
 		int Freq;
 		Byte versionBytes[4] = VersionBytes;
@@ -542,7 +544,7 @@ void on_AGW_Gs_frame(AGWUser * AGW, struct AGWHeader * Frame, Byte * Data)
 			// New Modem Name. Need to convert to index unless numeric
 
 			int n;
-			
+
 			if (strlen(&Data[4]) < 3)
 			{
 				n = atoi(&Data[4]);
@@ -569,6 +571,13 @@ void on_AGW_Gs_frame(AGWUser * AGW, struct AGWHeader * Frame, Byte * Data)
 			}
 		}
 
+		if (Data[27] == 2)
+		{
+			fx25_mode[Frame->Port] = Data[28];
+			il2p_mode[Frame->Port] = Data[29];
+			il2p_crc[Frame->Port] = Data[30];
+		}
+
 		// Return Freq and Modem
 
 		memcpy(&info[12], &rx_freq[Frame->Port], 2);
@@ -577,6 +586,22 @@ void on_AGW_Gs_frame(AGWUser * AGW, struct AGWHeader * Frame, Byte * Data)
 		memcpy(&info[38], versionBytes, 4);
 
 		Len = 44;
+
+		if (Data[27])
+		{
+			// BPQ understands fx25 and il2p fields
+
+			AGW->reportFreqAndModem = 2;			// Can report frequency Modem and flags
+
+
+			Len = 48;
+
+			info[44] = 1;			// Show includes Modem Flags
+			info[45] = fx25_mode[Frame->Port];
+			info[46] = il2p_mode[Frame->Port];
+			info[47] = il2p_crc[Frame->Port];
+		}
+
 		AGW_send_to_app(AGW->socket, AGW_Gs_Frame(Frame->Port, info, Len));
 		return;
 	}
@@ -1337,6 +1362,9 @@ void AGW_Report_Modem_Change(int port)
 	AGWUser * AGW;
 	string * pkt;
 
+	if (soundChannel[port] == 0)		// Not in use
+		return;
+
 	// I think we send to all AGW sockets
 
 	for (i = 0; i < AGWConCount; i++)
@@ -1345,16 +1373,27 @@ void AGW_Report_Modem_Change(int port)
 
 		if (AGW->reportFreqAndModem)
 		{
-			// QTSM 's' Message with a data field is used by QtSM to set/read Modem Params
+			// QTSM 'g' Message with a data field is used by QtSM to set/read Modem Params
 
-			Byte info[44] = { 0, 255, 24, 3, 100, 15, 6, 0, 1, 0, 0, 0 }; //QTSM Signature
+			Byte info[48] = { 0, 255, 24, 3, 100, 15, 6, 0, 1, 0, 0, 0 }; //QTSM Signature
+			int Len = 44;
 
 			// Return Freq and Modem
 
 			memcpy(&info[12], &rx_freq[port], 2);
 			memcpy(&info[16], modes_name[speed[port]], 20);
 			info[37] = speed[port];			// Index
-			AGW_send_to_app(AGW->socket, AGW_Gs_Frame(port, info, 44));
+
+			if (AGW->reportFreqAndModem == 2)
+			{
+				Len = 48;
+
+				info[44] = 1;			// Show includes Modem Flags
+				info[45] = fx25_mode[port];
+				info[46] = il2p_mode[port];
+				info[47] = il2p_crc[port];
+			}
+			AGW_send_to_app(AGW->socket, AGW_Gs_Frame(port, info, Len));
 		}
 	}
 }

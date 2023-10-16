@@ -25,6 +25,7 @@ typedef struct TStringList_T
 
 extern int fx25_mode[4];
 extern int il2p_mode[4];
+extern int il2p_crc[4];
 extern short rx_baudrate[5];
 
 #define FX25_MODE_NONE  0

@@ -160,6 +160,7 @@ int WaterfallMax = 6000;
 
 int Configuring = 0;
 bool lockWaterfall = false;
+bool inWaterfall = false;
 
 extern "C" int NeedWaterfallHeaders;
 extern "C" float BinSize;
@@ -498,7 +499,7 @@ void DoPSKWindows()
 	constellationDialog->resize(NextX, 140);
 }
 
-
+QTimer *wftimer;
 
 QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 {
@@ -763,7 +764,7 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 	connect(timer, SIGNAL(timeout()), this, SLOT(MyTimerSlot()));
 	timer->start(100);
 
-	QTimer *wftimer = new QTimer(this);
+	wftimer = new QTimer(this);
 	connect(wftimer, SIGNAL(timeout()), this, SLOT(doRestartWF()));
 	wftimer->start(1000 * 300);
 
@@ -884,9 +885,12 @@ void QtSoundModem::MyTimerSlot()
 	{
 		NeedWaterfallHeaders = 0;
 
-		Waterfall->fill(black);
-		DrawModemFreqRange();
-		DrawFreqTicks();
+		if (Waterfall)
+		{
+			Waterfall->fill(black);
+			DrawModemFreqRange();
+			DrawFreqTicks();
+		}
 	}
 
 	show_grid();
@@ -1443,6 +1447,11 @@ void QtSoundModem::doModems()
 	Dlg->IL2PModeC->setCurrentIndex(il2p_mode[2]);
 	Dlg->IL2PModeD->setCurrentIndex(il2p_mode[3]);
 
+	Dlg->CRC_A->setChecked(il2p_crc[0]);
+	Dlg->CRC_B->setChecked(il2p_crc[1]);
+	Dlg->CRC_C->setChecked(il2p_crc[2]);
+	Dlg->CRC_D->setChecked(il2p_crc[3]);
+
 	Dlg->CWIDCall->setText(CWIDCall);
 	Dlg->CWIDInterval->setText(QString::number(CWIDInterval));
 	Dlg->CWIDMark->setText(CWIDMark);
@@ -1532,6 +1541,12 @@ extern "C" void get_exclude_list(char * line, TStringList * list);
 void QtSoundModem::modemaccept()
 {
 	modemSave();
+
+	AGW_Report_Modem_Change(0);
+	AGW_Report_Modem_Change(1);
+	AGW_Report_Modem_Change(2);
+	AGW_Report_Modem_Change(3);
+
 	delete(Dlg);
 	saveSettings();
 
@@ -1661,6 +1676,11 @@ void QtSoundModem::modemSave()
 	il2p_mode[2] = Dlg->IL2PModeC->currentIndex();
 	il2p_mode[3] = Dlg->IL2PModeD->currentIndex();
 
+	il2p_crc[0] = Dlg->CRC_A->isChecked();
+	il2p_crc[1] = Dlg->CRC_B->isChecked();
+	il2p_crc[2] = Dlg->CRC_C->isChecked();
+	il2p_crc[3] = Dlg->CRC_D->isChecked();
+
 	recovery[0] = Dlg->recoverBitA->currentIndex();
 	recovery[1] = Dlg->recoverBitB->currentIndex();
 	recovery[2] = Dlg->recoverBitC->currentIndex();
@@ -1712,7 +1732,6 @@ void QtSoundModem::modemSave()
 	for (i = 0; i < 4; i++)
 	{
 		initTStringList(&list_digi_callsigns[i]);
-
 		get_exclude_list(MyDigiCall[i], &list_digi_callsigns[i]);
 	}
 
@@ -1729,6 +1748,7 @@ void QtSoundModem::modemSave()
 	Q = Dlg->LPFWidthD->text();
 	lpf[3] = Q.toInt();
 */
+
 }
 
 void QtSoundModem::modemreject()
@@ -2401,6 +2421,14 @@ void QtSoundModem::handleButton(int Port, int Type)
 
 void QtSoundModem::doRestartWF()
 {
+	if (inWaterfall)
+	{
+		// in waterfall update thread
+
+		wftimer->start(5000);
+		return;
+	}
+		
 	lockWaterfall = true;
 
 	if (Firstwaterfall | Secondwaterfall)
@@ -2849,6 +2877,11 @@ void doWaterfallThread(void * param)
 	if (lockWaterfall)
 		return;
 
+	if (Configuring)
+		return;
+
+	inWaterfall = true;					// don't allow restart waterfall
+
 	if (snd_ch == 1 && UsingLeft == 0)	// Only using right
 		snd_ch = 0;						// Samples are in first buffer
 
@@ -2865,8 +2898,6 @@ void doWaterfallThread(void * param)
 	float RealOut[8192] = { 0 };
 	float ImagOut[8192];
 
-	if (Configuring)
-		return;
 
 	RefreshLevel(CurrentLevel);	// Signal Level
 
@@ -2954,10 +2985,15 @@ void doWaterfallThread(void * param)
 	// we always do fft so we can get centre freq and do busy detect. But only upodate waterfall if on display
 
 	if (bm == 0)
+	{
+		inWaterfall = false;
 		return;
-
+	}
 	if ((Firstwaterfall == 0 && snd_ch == 0) || (Secondwaterfall == 0 && snd_ch == 1))
+	{
+		inWaterfall = false;
 		return;
+	}
 
 	p = Line;
 	lineLen = 4096;
@@ -3005,6 +3041,8 @@ void doWaterfallThread(void * param)
 		if (TopLine > 79)
 			TopLine = 0;
 	}
+
+	inWaterfall = false;
 }
 
 

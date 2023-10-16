@@ -245,7 +245,6 @@ void ProcessKISSFrame(void * socket, UCHAR * Msg, int Len)
 				Add(&KISS.buffer[Chan], TXMSG);
 		}
 
-		
 		return;
 
 	case KISS_DATA:

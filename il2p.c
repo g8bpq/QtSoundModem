@@ -42,10 +42,43 @@ along with QtSoundModem.  If not, see http://www.gnu.org/licenses
 
 // IP2P receive code (il2p_rec_bit) is called from the bit receiving code in ax25_demod.c, so includes parallel decoders
 
-
-
-
 #include "UZ7HOStuff.h"
+
+#include <stdint.h>	// for uint64_t
+
+ // Oct 2023 Nino has added an optional crc
+
+// Hamming(7,4) Encoding Table
+// Enter this table with the 4-bit value to be encoded.
+// Returns 7-bit encoded value, with high bit zero'd.
+
+uint8_t Hamming74EncodeTable[16] = { 0x0, 0x71, 0x62, 0x13, 0x54, 0x25, 0x36, 0x47, 0x38, 0x49, 0x5a, 0x2b, 0x6c, 0x1d, 0xe, 0x7f };
+
+// Hamming(7,4) Decoding Table
+// Enter this table with 7-bit encoded value, high bit masked.
+// Returns 4-bit decoded value.
+
+uint16_t Hamming74DecodeTable[128] = { \
+	  0x0, 0x0, 0x0, 0x3, 0x0, 0x5, 0xe, 0x7, \
+	  0x0, 0x9, 0xe, 0xb, 0xe, 0xd, 0xe, 0xe, \
+	  0x0, 0x3, 0x3, 0x3, 0x4, 0xd, 0x6, 0x3, \
+	  0x8, 0xd, 0xa, 0x3, 0xd, 0xd, 0xe, 0xd, \
+	  0x0, 0x5, 0x2, 0xb, 0x5, 0x5, 0x6, 0x5, \
+	  0x8, 0xb, 0xb, 0xb, 0xc, 0x5, 0xe, 0xb, \
+	  0x8, 0x1, 0x6, 0x3, 0x6, 0x5, 0x6, 0x6, \
+	  0x8, 0x8, 0x8, 0xb, 0x8, 0xd, 0x6, 0xf, \
+	  0x0, 0x9, 0x2, 0x7, 0x4, 0x7, 0x7, 0x7, \
+	  0x9, 0x9, 0xa, 0x9, 0xc, 0x9, 0xe, 0x7, \
+	  0x4, 0x1, 0xa, 0x3, 0x4, 0x4, 0x4, 0x7, \
+	  0xa, 0x9, 0xa, 0xa, 0x4, 0xd, 0xa, 0xf, \
+	  0x2, 0x1, 0x2, 0x2, 0xc, 0x5, 0x2, 0x7, \
+	  0xc, 0x9, 0x2, 0xb, 0xc, 0xc, 0xc, 0xf, \
+	  0x1, 0x1, 0x2, 0x1, 0x4, 0x1, 0x6, 0xf, \
+	  0x8, 0x1, 0xa, 0xf, 0xc, 0xf, 0xf, 0xf };
+
+
+
+
 
 void Debugprintf(const char * format, ...);
 int SMUpdatePhaseConstellation(int chan, float * Phases, float * Mags, int intPSKPhase, int Count);
@@ -109,7 +142,6 @@ int MaxMagIndex = 0;
 #ifndef FX25_H
 #define FX25_H
 
-#include <stdint.h>	// for uint64_t
 
 extern unsigned int pskStates[4];
 
@@ -343,6 +375,7 @@ struct packet_s {
 	unsigned char frame_data[AX25_MAX_PACKET_LEN + 1];
 	/* Raw frame contents, without the CRC. */
 
+	unsigned char crc[4];		// received crc
 
 	int magic2;		/* Will get stomped on if above overflows. */
 };
@@ -1014,6 +1047,39 @@ void multi_modem_process_rec_packet(int snd_ch, int subchan, int slice, packet_t
 	int Quality = 0;
 
 	sprintf(Mode, "IL2P %d", centreFreq);
+
+	// check crc if enabled
+
+	if (il2p_crc[snd_ch])
+	{
+		unsigned short CRCMSG;
+		unsigned short CRCCALC;
+		uint8_t crc[4];
+
+		// check crc if enabled
+
+			// The four encoded CRC bytes are arranged :
+			// | CRC3 | CRC2 | CRC1 | CRC0 | but we store as received, so F->crc[0] is CRC3
+			// CRC3 encoded from high nibble of 16 - bit CRC value (from crc2)
+			// CRC0 encoded from low nibble of 16 - bit CRC value (from crc1)
+
+		crc[0] = Hamming74DecodeTable[(pp->crc[0] & 0x7f)];
+		crc[1] = Hamming74DecodeTable[(pp->crc[1] & 0x7f)];
+		crc[2] = Hamming74DecodeTable[(pp->crc[2] & 0x7f)];
+		crc[3] = Hamming74DecodeTable[(pp->crc[3] & 0x7f)];
+
+		CRCMSG = crc[0] << 12 | crc[1] << 8 | crc[2] << 4 | crc[3];
+
+		CRCCALC = get_fcs(pp->frame_data, pp->frame_len);
+
+		if (CRCCALC != CRCMSG)
+		{
+			Debugprintf("CRC Error Decoder %d  Received %x Sent %x", subchan, CRCCALC, CRCMSG);
+	//		freeString(data);
+	//		ax25_delete(pp);
+	//		return;
+		}
+	}
 
 	stringAdd(data, pp->frame_data, pp->frame_len + 2);  // QTSM assumes a CRC
 
@@ -3151,6 +3217,13 @@ int il2p_type_1_header(packet_t pp, int max_fec, unsigned char *hdr)
 	ax25_get_addr_no_ssid(pp, AX25_SOURCE, src_addr);
 	int src_ssid = ax25_get_ssid(pp, AX25_SOURCE);
 
+	if ((pp->frame_data[6] & 0x80) == (pp->frame_data[13] & 0x80))
+	{
+		// Both C bits are the same (ax.25 v1) so can't be sent as type 1 as will be changed
+
+		return -1;
+	}
+
 	unsigned char *a = (unsigned char *)dst_addr;
 	for (int i = 0; *a != '\0'; i++, a++) {
 		if (*a < ' ' || *a > '_') {
@@ -3919,7 +3992,7 @@ void il2p_rec_bit(int chan, int subchan, int slice, int dbit)
 		//assert(slice >= 0 && slice < MAX_SLICERS);
 		F = il2p_context[chan][subchan][slice] = (struct il2p_context_s *)malloc(sizeof(struct il2p_context_s));
 		//assert(F != NULL);
-		memset(F, 0, sizeof(struct il2p_context_s));
+memset(F, 0, sizeof(struct il2p_context_s));
 	}
 
 	// Accumulate most recent 24 bits received.  Most recent is LSB.
@@ -3942,7 +4015,7 @@ void il2p_rec_bit(int chan, int subchan, int slice, int dbit)
 			nPhases[chan][subchan][slice] = 0;
 
 			// Determine Centre Freq
-			
+
 			centreFreq[chan] = GuessCentreFreq(chan);
 		}
 		else if (__builtin_popcount((~F->acc & 0x00ffffff) ^ IL2P_SYNC_WORD) <= 1) {
@@ -3956,7 +4029,7 @@ void il2p_rec_bit(int chan, int subchan, int slice, int dbit)
 			centreFreq[chan] = GuessCentreFreq(chan);
 			nPhases[chan][subchan][slice] = 0;
 		}
-			
+
 		break;
 
 	case IL2P_HEADER:		// Gathering the header.
@@ -3990,7 +4063,7 @@ void il2p_rec_bit(int chan, int subchan, int slice, int dbit)
 					F->eplen = il2p_payload_compute(&plprop, len, max_fec);
 
 					if (il2p_get_debug() >= 1)
-					{	
+					{
 						Debugprintf("Header type %d, max fec = %d", hdr_type, max_fec);
 						Debugprintf("Need to collect %d encoded bytes for %d byte payload.", F->eplen, len);
 						Debugprintf("%d small blocks of %d and %d large blocks of %d.  %d parity symbols per block",
@@ -4008,9 +4081,21 @@ void il2p_rec_bit(int chan, int subchan, int slice, int dbit)
 						F->pc = 0;
 						F->state = IL2P_PAYLOAD;
 					}
-					else if (F->eplen == 0) {	// No payload.
+					else if (F->eplen == 0)
+					{
+						// No payload.
+
 						F->pc = 0;
-						F->state = IL2P_DECODE;
+
+						if (il2p_crc[chan])
+						{
+							// enter collect crc state
+
+							F->crccount = 0;
+							F->state = IL2P_CRC;
+						}
+						else
+							F->state = IL2P_DECODE;
 					}
 					else {			// Error.
 
@@ -4039,16 +4124,47 @@ void il2p_rec_bit(int chan, int subchan, int slice, int dbit)
 			else {
 				F->spayload[F->pc++] = (~F->acc) & 0xff;
 			}
-			if (F->pc == F->eplen) {
+			if (F->pc == F->eplen)
+			{
+				// got frame. See if need crc
 
-				// TODO?: for symmetry it seems like we should clarify the payload before combining.
+				if (il2p_crc[chan])
+				{
+					// enter collect crc state
 
-				F->state = IL2P_DECODE;
+					F->crccount = 0;
+					F->state = IL2P_CRC;
+				}
+				else
+					F->state = IL2P_DECODE;
 			}
 		}
 		break;
 
+	case IL2P_CRC:
+
+		F->bc++;
+		if (F->bc == 8)
+		{
+			// full byte has been collected.
+			F->bc = 0;
+			if (!F->polarity)
+				F->crc[F->crccount++] = F->acc & 0xff;
+			else
+				F->crc[F->crccount++] = (~F->acc) & 0xff;
+
+			if (F->crccount == 4)
+			{
+				// have all crc bytes. enter DECODE
+
+				F->state = IL2P_DECODE;
+			}
+		}
+
+			break;
+
 	case IL2P_DECODE:
+
 		// We get here after a good header and any payload has been collected.
 		// Processing is delayed by one bit but I think it makes the logic cleaner.
 		// During unit testing be sure to send an extra bit to flush it out at the end.
@@ -4076,6 +4192,18 @@ void il2p_rec_bit(int chan, int subchan, int slice, int dbit)
 					  // Currently this just means that a FEC mode was used.
 
 			// TODO: Could we put last 3 arguments in packet object rather than passing around separately?
+
+			// if using crc pass received crc to packet object
+
+			if (il2p_crc[chan])
+			{
+				//copy crc bytes to packet object
+
+				pp->crc[0] = F->crc[0];
+				pp->crc[1] = F->crc[1];
+				pp->crc[2] = F->crc[2];
+				pp->crc[3] = F->crc[3];
+			}
 
 			multi_modem_process_rec_packet(chan, subchan, slice, pp, alevel, retries, is_fx25, slice, centreFreq[chan]);
 		}
@@ -4269,12 +4397,18 @@ static void send_bit(int chan, int b, int polarity);
  *
  *--------------------------------------------------------------*/
 
+
 string * il2p_send_frame(int chan, packet_t pp, int max_fec, int polarity)
 {
-	unsigned char encoded[IL2P_MAX_PACKET_SIZE];
+	unsigned char encoded[IL2P_MAX_PACKET_SIZE] = "";
 	string * packet = newString();
 	int preamblecount;
 	unsigned char preamble[1024];
+
+	// The data includes the 2 byte crc but length doesn't
+
+	uint8_t crc1 = pp->frame_data[pp->frame_len];			// Low 8 bits
+	uint8_t crc2 = pp->frame_data[pp->frame_len + 1];		// High 8 bits
 
 	encoded[0] = (IL2P_SYNC_WORD >> 16) & 0xff;
 	encoded[1] = (IL2P_SYNC_WORD >> 8) & 0xff;
@@ -4288,6 +4422,24 @@ string * il2p_send_frame(int chan, packet_t pp, int max_fec, int polarity)
 	}
 
 	elen += IL2P_SYNC_WORD_SIZE;
+
+	// if we are using crc add it now. elen should point to end of data
+	// crc should be at pp->frame_data[pp->frame_len]
+
+	if (il2p_crc[chan])
+	{
+		// The four encoded CRC bytes are arranged :
+		// | CRC3 | CRC2 | CRC1 | CRC0 |
+
+		// CRC3 encoded from high nibble of 16 - bit CRC value (from crc2)
+		// CRC0 encoded from low nibble of 16 - bit CRC value (from crc1)
+
+		encoded[elen++] = Hamming74EncodeTable[crc2 >> 4];
+		encoded[elen++] = Hamming74EncodeTable[crc2 & 0xf];
+		encoded[elen++] = Hamming74EncodeTable[crc1 >> 4];
+		encoded[elen++] = Hamming74EncodeTable[crc1 &0xf];
+	}
+
 
 	number_of_bits_sent[chan] = 0;
 
@@ -4366,7 +4518,7 @@ string * fill_il2p_data(int snd_ch, string * data)
 	// Call il2p_send_frame to build the bit stream
 
 	pp->frame_len = data->Length - 2;					// Included CRC
-	memcpy(pp->frame_data, data->Data, data->Length);
+	memcpy(pp->frame_data, data->Data, data->Length);	// Copy the crc in case we are going to send it
 
 	result = il2p_send_frame(snd_ch, pp, 1, 0);
 

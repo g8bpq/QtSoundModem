@@ -737,6 +737,19 @@
          <string>Retries</string>
         </property>
        </widget>
+       <widget class="QCheckBox" name="CRC_A">
+        <property name="geometry">
+         <rect>
+          <x>200</x>
+          <y>280</y>
+          <width>53</width>
+          <height>21</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>CRC</string>
+        </property>
+       </widget>
       </widget>
      </widget>
     </widget>
@@ -1444,6 +1457,19 @@
           <string>il2p Only</string>
          </property>
         </item>
+       </widget>
+       <widget class="QCheckBox" name="CRC_B">
+        <property name="geometry">
+         <rect>
+          <x>200</x>
+          <y>280</y>
+          <width>53</width>
+          <height>21</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>CRC</string>
+        </property>
        </widget>
       </widget>
       <widget class="QLabel" name="label_88">
@@ -2202,6 +2228,19 @@
          </rect>
         </property>
        </widget>
+       <widget class="QCheckBox" name="CRC_C">
+        <property name="geometry">
+         <rect>
+          <x>200</x>
+          <y>280</y>
+          <width>53</width>
+          <height>21</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>CRC</string>
+        </property>
+       </widget>
       </widget>
       <widget class="QComboBox" name="IL2PModeC">
        <property name="geometry">
@@ -2954,6 +2993,19 @@
           <width>41</width>
           <height>23</height>
          </rect>
+        </property>
+       </widget>
+       <widget class="QCheckBox" name="CRC_D">
+        <property name="geometry">
+         <rect>
+          <x>200</x>
+          <y>280</y>
+          <width>53</width>
+          <height>21</height>
+         </rect>
+        </property>
+        <property name="text">
+         <string>CRC</string>
         </property>
        </widget>
       </widget>
