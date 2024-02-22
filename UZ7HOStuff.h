@@ -4,8 +4,8 @@
 //	 My port of UZ7HO's Soundmodem
 //
 
-#define VersionString "0.0.0.71"
-#define VersionBytes {0, 0, 0, 71}
+#define VersionString "0.0.0.72 Beta 1"
+#define VersionBytes {0, 0, 0, 72}
 
 // Added FX25. 4x100 FEC and V27 not Working and disabled
 
@@ -106,13 +106,13 @@
 
 // 0.48 Send FRMR for unrecognised frame types
 
-// 0.49 Add Andy's FEC Tag correlation coode
+// 0.49 Add Andy's FEC Tag correlation code
 
 // 0.50 Fix Waterfall display when only using right channel
 //		Allow 1200 baud fsk at other center freqs
 //		Add Port numbers to Window title and Try Icon tooltip
 //		Fix calculation of filters for multiple decoders
-//		Add RX Offset setting (for satellite operation
+//		Add RX Offset setting (for satellite operation)
 
 // 0.51	Fix Multithreading with more that 2 modems
 
@@ -178,7 +178,7 @@
 //		Improve reliability of waterfall update
 //		Report and set fx.25 and il2p flags to/from BPQ
 
-
+// .72	Fix IL2P for RUH modems
 
 
 #include <string.h>
@@ -329,8 +329,6 @@ typedef struct TFX25_t
 	Byte  rs_size;
 	Byte size_cnt;
 } TFX25;
-
-
 
 typedef struct TDetector_t
 {

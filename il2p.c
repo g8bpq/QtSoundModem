@@ -127,7 +127,7 @@ typedef struct alevel_s {
 
 
 alevel_t demod_get_audio_level(int chan, int subchan);
-void tone_gen_put_bit(int chan, int dat);
+void tone_gen_put_bit(int chan, int dat, int scramble);
 
 int ax25memdebug = 1;
 
@@ -1031,9 +1031,6 @@ packet_t ax25_i_frame(char addrs[AX25_MAX_ADDRS][AX25_MAX_ADDR_LEN], int num_add
 } /* end ax25_i_frame */
 
 
-
-
-
 extern TStringList detect_list[5];
 extern TStringList detect_list_c[5];
 
@@ -1075,9 +1072,9 @@ void multi_modem_process_rec_packet(int snd_ch, int subchan, int slice, packet_t
 		if (CRCCALC != CRCMSG)
 		{
 			Debugprintf("CRC Error Decoder %d  Received %x Sent %x", subchan, CRCCALC, CRCMSG);
-	//		freeString(data);
-	//		ax25_delete(pp);
-	//		return;
+			freeString(data);
+			ax25_delete(pp);
+			return;
 		}
 	}
 
@@ -3959,7 +3956,7 @@ struct il2p_context_s *il2p_context[4][16][3];
  *
  * Name:        il2p_rec_bit
  *
- * Purpose:     Extract FX.25 packets from a stream of bits.
+ * Purpose:     Extract il2p packets from a stream of bits.
  *
  * Inputs:      chan    - Channel number.
  *
@@ -3984,15 +3981,18 @@ void il2p_rec_bit(int chan, int subchan, int slice, int dbit)
 
 	if (dbit)
 		dbit = 1;
+	else
+		dbit = 0;
 
 	struct il2p_context_s *F = il2p_context[chan][subchan][slice];
+
 	if (F == NULL) {
 		//assert(chan >= 0 && chan < MAX_CHANS);
 		//assert(subchan >= 0 && subchan < MAX_SUBCHANS);
 		//assert(slice >= 0 && slice < MAX_SLICERS);
 		F = il2p_context[chan][subchan][slice] = (struct il2p_context_s *)malloc(sizeof(struct il2p_context_s));
 		//assert(F != NULL);
-memset(F, 0, sizeof(struct il2p_context_s));
+		memset(F, 0, sizeof(struct il2p_context_s));
 	}
 
 	// Accumulate most recent 24 bits received.  Most recent is LSB.
@@ -4018,7 +4018,7 @@ memset(F, 0, sizeof(struct il2p_context_s));
 
 			centreFreq[chan] = GuessCentreFreq(chan);
 		}
-		else if (__builtin_popcount((~F->acc & 0x00ffffff) ^ IL2P_SYNC_WORD) <= 1) {
+		else if (__builtin_popcount((~(F->acc) & 0x00ffffff) ^ IL2P_SYNC_WORD) <= 1) {
 			// FIXME - this pops up occasionally with random noise.  Find better way to convey information.
 			// This also happens for each slicer - to noisy.
 			//Debugprintf ("IL2P header has reverse polarity\n");

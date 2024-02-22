@@ -799,7 +799,8 @@ int OpenSoundCapture(char * CaptureDevice, int m_sampleRate, int Report)
 	
 	if ((err = snd_pcm_hw_params_set_channels(rechandle, hw_params, m_recchannels)) < 0)
 	{
-		Debugprintf("cannot set rec channel count to 2 (%s)", snd_strerror(err));
+		if (Report)
+			Debugprintf("cannot set rec channel count to 2 (%s)", snd_strerror(err));
 
 		m_recchannels = 1;
 
@@ -854,10 +855,10 @@ int OpenSoundCapture(char * CaptureDevice, int m_sampleRate, int Report)
 		snd_pcm_hw_params_set_rate(rechandle, hw_params, m_sampleRate, 0);
 		snd_pcm_hw_params_set_channels(rechandle, hw_params, m_recchannels);
 
-		err = snd_pcm_hw_params_set_buffer_size(rechandle, hw_params, 65536);
+	//	err = snd_pcm_hw_params_set_buffer_size(rechandle, hw_params, 65536);
 
-		if (err)
-			Debugprintf("cannot set buffer size (%s)", snd_strerror(err));
+	//	if (err)
+	//		Debugprintf("cannot set buffer size (%s)", snd_strerror(err));
 
 		err = snd_pcm_hw_params_set_period_size(rechandle, hw_params, (snd_pcm_uframes_t) { 1024 }, (int) { 0 });
 
@@ -1266,6 +1267,7 @@ int InitSound(BOOL Quiet)
 
 int min = 0, max = 0, lastlevelreport = 0, lastlevelGUI = 0;
 UCHAR CurrentLevel = 0;		// Peak from current samples
+UCHAR CurrentLevelR = 0;		// Peak from current samples
 
 void PollReceivedSamples()
 {

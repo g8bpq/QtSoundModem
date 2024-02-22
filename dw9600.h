@@ -376,7 +376,7 @@ typedef struct alevel_s {
 
 #ifndef AXTEST
 // TODO: remove this?
-#define AX25MEMDEBUG 1
+#define AX25MEMDEBUG 0
 #endif
 
 
@@ -1982,7 +1982,7 @@ int gen_tone_init(struct audio_s *pp, int amp, int gen_packets);
 
 //int gen_tone_close (void);
 
-void tone_gen_put_bit(int chan, int dat);
+void tone_gen_put_bit(int chan, int dat, int scramble);
 
 void gen_tone_put_sample(int chan, int a, int sam); 
 

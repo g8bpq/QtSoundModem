@@ -869,6 +869,9 @@ int get_addr(char * Calls, UCHAR * AXCalls)
 
 	ptr = strtok_s(NULL, " ,", &Context);
 
+	if (ptr == NULL)
+		return FALSE;
+
 	if (ConvToAX25(ptr, axptr) == 0)
 		return FALSE;
 

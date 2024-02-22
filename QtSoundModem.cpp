@@ -481,7 +481,7 @@ void DoPSKWindows()
 
 	for (i = 0; i < 4; i++)
 	{
-		if (pskStates[i])
+		if (soundChannel[i] && pskStates[i])
 		{
 			constellationLabel[i]->setGeometry(QRect(NextX, 19, 121, 121));
 			QualLabel[i]->setGeometry(QRect(1 + NextX, 1, 120, 15));
@@ -659,6 +659,11 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 	RXLevel->fill(white);
 	ui.RXLevel->setPixmap(QPixmap::fromImage(*RXLevel));
 	RXLevelCopy = ui.RXLevel;
+
+	RXLevel2 = new QImage(150, 10, QImage::Format_RGB32);
+	RXLevel2->fill(white);
+	ui.RXLevel2->setPixmap(QPixmap::fromImage(*RXLevel2));
+	RXLevel2Copy = ui.RXLevel2;
 
 	DCDLabel[0] = new QLabel(this);
 	DCDLabel[0]->setObjectName(QString::fromUtf8("DCDLedA"));
@@ -2462,8 +2467,7 @@ void QtSoundModem::doRestartWF()
 	RXLevel2->fill(white);
 
 	ui.RXLevel->setVisible(1);
-	if (UsingBothChannels)
-		ui.RXLevel2->setVisible(1);
+	ui.RXLevel2->setVisible(1);
 
 	lockWaterfall = false;
 }
@@ -2553,7 +2557,7 @@ void QtSoundModem::RefreshSpectrum(unsigned char * Data)
 
 }
 
-void RefreshLevel(unsigned int Level)
+void RefreshLevel(unsigned int Level, unsigned int LevelR)
 {
 	// Redraw the RX Level Bar Graph
 
@@ -2577,9 +2581,29 @@ void RefreshLevel(unsigned int Level)
 		}
 	}
 	RXLevelCopy->setPixmap(QPixmap::fromImage(*RXLevel));
+
+	for (x = 0; x < 150; x++)
+	{
+		for (y = 0; y < 10; y++)
+		{
+			if (x < LevelR)
+			{
+				if (LevelR < 50)
+					RXLevel2->setPixel(x, y, yellow);
+				else if (LevelR > 135)
+					RXLevel2->setPixel(x, y, red);
+				else
+					RXLevel2->setPixel(x, y, green);
+			}
+			else
+				RXLevel2->setPixel(x, y, white);
+		}
+	}
+	RXLevel2Copy->setPixmap(QPixmap::fromImage(*RXLevel2));
 }
 
 extern "C" unsigned char CurrentLevel;
+extern "C" unsigned char CurrentLevelR;
 
 void QtSoundModem::RefreshWaterfall(int snd_ch, unsigned char * Data)
 {
@@ -2899,7 +2923,7 @@ void doWaterfallThread(void * param)
 	float ImagOut[8192];
 
 
-	RefreshLevel(CurrentLevel);	// Signal Level
+	RefreshLevel(CurrentLevel, CurrentLevelR);	// Signal Level
 
 	hFFTSize = FFTSize / 2;
 
@@ -2910,11 +2934,8 @@ void doWaterfallThread(void * param)
 	// So can use 1024 or 4096. 1024 gives 512 bins of 11.71875 and a 512 pixel 
 	// display (is this enough?)
 
-
-
 	Start = (WaterfallMin / BinSize);		// First and last bins to process
 	End = (WaterfallMax / BinSize);
-
 
 	if (0)	//RSID_WF
 	{

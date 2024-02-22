@@ -509,9 +509,10 @@ for (i = 0; i < 100; i++)
 	return TRUE;
 }
 
-static int min = 0, max = 0, lastlevelGUI = 0, lastlevelreport = 0;
+static int minL = 0, maxL = 0, minR = 0; maxR = 0, lastlevelGUI = 0, lastlevelreport = 0;
 
 UCHAR CurrentLevel = 0;		// Peak from current samples
+UCHAR CurrentLevelR = 0;	// Peak from current samples
 
 void PollReceivedSamples()
 {
@@ -521,7 +522,7 @@ void PollReceivedSamples()
 	// For level display we want a fairly rapid level average but only want to report 
 	// to log every 10 secs or so
 
-	// with Windows we get mono data
+	// We get stereo data
 
 	if (stdinMode)
 	{
@@ -534,16 +535,26 @@ void PollReceivedSamples()
 		short * ptr = &inbuffer[inIndex][0];
 		int i;
 
+		// Find min and max left abd right samples 
+
 		for (i = 0; i < ReceiveSize; i++)
 		{
-			if (*(ptr) < min)
-				min = *ptr;
-			else if (*(ptr) > max)
-				max = *ptr;
+			if (*(ptr) < minL)
+				minL = *ptr;
+			else if (*(ptr) > maxL)
+				maxL = *ptr;
+	
+			ptr++;
+
+			if (*(ptr) < minR)
+				minR = *ptr;
+			else if (*(ptr) > maxR)
+				maxR = *ptr;
 			ptr++;
 		}
 
-		CurrentLevel = ((max - min) * 75) /32768;	// Scale to 150 max
+		CurrentLevel = ((maxL - minL) * 75) / 32768;	// Scale to 150 max
+		CurrentLevelR = ((maxR - minR) * 75) / 32768;	// Scale to 150 max
 
 		if ((Now - lastlevelGUI) > 2000)	// 2 Secs
 		{
@@ -557,11 +568,13 @@ void PollReceivedSamples()
 				char HostCmd[64];
 				lastlevelreport = Now;
 
-				sprintf(HostCmd, "INPUTPEAKS %d %d", min, max);
-				Debugprintf("Input peaks = %d, %d", min, max);
-
+				sprintf(HostCmd, "INPUTPEAKS %d %d", minL, maxL);
+				if (UsingBothChannels)
+					Debugprintf("Input peaks L= %d, %d, R= %d, %d", minL, maxL, minR, maxR);
+				else
+					Debugprintf("Input peaks = %d, %d", minL, maxL);
 			}
-			min = max = 0;
+			minL = maxL = minR = maxR = 0;
 		}
 
 //		debugprintf(LOGDEBUG, "Process %d %d", inIndex, inheader[inIndex].dwBytesRecorded/2);
@@ -977,14 +990,14 @@ void StdinPollReceivedSamples()
 
 	for (i = 0; i < ReceiveSize; i++)
 	{
-		if (*(ptr) < min)
-			min = *ptr;
-		else if (*(ptr) > max)
-			max = *ptr;
+		if (*(ptr) < minL)
+			minL = *ptr;
+		else if (*(ptr) > maxL)
+			maxL = *ptr;
 		ptr++;
 	}
 
-	CurrentLevel = ((max - min) * 75) / 32768;	// Scale to 150 max
+	CurrentLevel = ((maxL - minL) * 75) / 32768;	// Scale to 150 max
 
 	if ((Now - lastlevelGUI) > 2000)	// 2 Secs
 	{
@@ -996,11 +1009,11 @@ void StdinPollReceivedSamples()
 			char HostCmd[64];
 			lastlevelreport = Now;
 
-			sprintf(HostCmd, "INPUTPEAKS %d %d", min, max);
-			Debugprintf("Input peaks = %d, %d", min, max);
+			sprintf(HostCmd, "INPUTPEAKS %d %d", minL, maxL);
+			Debugprintf("Input peaks = %d, %d", minL, maxL);
 
 		}
-		min = max = 0;
+		minL = maxL = 0;
 	}
 
 	//		debugprintf(LOGDEBUG, "Process %d %d", inIndex, inheader[inIndex].dwBytesRecorded/2);

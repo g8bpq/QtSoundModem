@@ -27,6 +27,7 @@ extern int fx25_mode[4];
 extern int il2p_mode[4];
 extern int il2p_crc[4];
 extern short rx_baudrate[5];
+extern short tx_bitrate[5];
 
 #define FX25_MODE_NONE  0
 #define FX25_MODE_RX  1
@@ -453,9 +454,11 @@ a good modem here and providing a result when it is received.
 void hdlc_rec_bit(int chan, int subchan, int slice, int raw, int is_scrambled, int not_used_remove)
 {
 
-	int dbit;			/* Data bit after undoing NRZI. */
+	int dbit;		/* Data bit after undoing NRZI. */
 					/* Should be only 0 or 1. */
+
 	struct hdlc_state_s *H;
+	int descram;
 
 	/*
 	 * Different state information for each channel / subchannel / slice.
@@ -469,27 +472,31 @@ void hdlc_rec_bit(int chan, int subchan, int slice, int raw, int is_scrambled, i
 	 *   A '1' bit is represented by no change.
 	 */
 
-	if (is_scrambled) {
-		int descram;
-
+	if (is_scrambled)
+	{
 		descram = descramble(raw, &(H->lfsr));
-
-		dbit = (descram == H->prev_descram);
+		dbit = (descram == H->prev_descram);			// This does nrzi
 		H->prev_descram = descram;
 		H->prev_raw = raw;
 	}
 	else {
 
 		dbit = (raw == H->prev_raw);
-
-		H->prev_raw = raw;
+		H->prev_raw = raw;						// This does nrzi
 	}
+
+	// dbit should be after nrzi, descram after descramble but before nrzi
 
 	// After BER insertion, NRZI, and any descrambling, feed into FX.25 decoder as well.
 
 //	fx25_rec_bit (chan, subchan, slice, dbit);
 
-	il2p_rec_bit (chan, subchan, slice, raw);	// Note: skip NRZI.
+	if (il2p_mode[chan])
+	{
+		il2p_rec_bit(chan, subchan, slice, raw);	// not scrambled, not nrzi	
+		if (il2p_mode[chan] == IL2P_MODE_ONLY)		// Dont try HDLC decode
+			return;
+	}
 
 	/*
 	 * Octets are sent LSB first.
@@ -618,7 +625,7 @@ void hdlc_rec_bit(int chan, int subchan, int slice, int raw, int is_scrambled, i
 		 *
 		 * This indicates loss of signal.
 		 * But we will let it slip thru because it might diminish
-		 * our single bit fixup effort.   Instead give up on frame
+		 * our float bit fixup effort.   Instead give up on frame
 		 * only when we see eight 1 bits in a row.
 		 *
 		 *	11111111
@@ -961,7 +968,7 @@ typedef struct retry_conf_s {
 
 static const char * retry_text[] = {
 		"NONE",
-		"SINGLE",
+		"float",
 		"DOUBLE",
 		"TRIPLE",
 		"TWO_SEP",
@@ -990,7 +997,7 @@ static int sanity_check(unsigned char *buf, int blen, retry_t bits_flipped, enum
  *					Level of effort to recover from
  *					a bad FCS on the frame.
  *					0 = no effort
- *					1 = try inverting a single bit
+ *					1 = try inverting a float bit
  *					2... = more techniques...
  *
  *	    			enum sanity_e sanity_test;
@@ -1114,7 +1121,7 @@ void hdlc_rec2_block(rrbb_t block)
  * Global In:	configuration fix_bits - Maximum level of fix up to attempt.
  *
  *				RETRY_NONE (0)	- Don't try any.
- *				RETRY_INVERT_SINGLE (1)  - Try inverting single bits.
+ *				RETRY_INVERT_float (1)  - Try inverting float bits.
  *				etc.
  *
  *		configuration passall - Let it thru with bad CRC after exhausting
@@ -1158,7 +1165,7 @@ static int try_to_fix_quick_now(rrbb_t block, int chan, int subchan, int slice, 
 	 */
 	if (fix_bits < RETRY_INVERT_SINGLE) {
 
-		/* Stop before single bit fix up. */
+		/* Stop before float bit fix up. */
 
 		return 0;	/* failure. */
 	}
@@ -1174,7 +1181,7 @@ static int try_to_fix_quick_now(rrbb_t block, int chan, int subchan, int slice, 
 		if (ok) {
 #if DEBUG
 			text_color_set(DW_COLOR_ERROR);
-			dw_printf("*** Success by flipping SINGLE bit %d of %d ***\n", i, len);
+			dw_printf("*** Success by flipping float bit %d of %d ***\n", i, len);
 #endif
 			return 1;
 		}
@@ -1227,7 +1234,7 @@ static int try_to_fix_quick_now(rrbb_t block, int chan, int subchan, int slice, 
 
 
 	/*
-	 * Two  non-adjacent ("separated") single bits.
+	 * Two  non-adjacent ("separated") float bits.
 	 * It chews up a lot of CPU time.  Usual test takes 4 times longer to run.
 	 *
 	 * Processing time is order N squared so time goes up rapidly with larger frames.
@@ -1363,7 +1370,7 @@ inline static char is_sep_bit_modified(int bit_idx, retry_conf_t retry_conf) {
  *	   			retry:
  *					Level of effort to recover from a bad FCS on the frame.
  *				                RETRY_NONE = 0
- *				                RETRY_INVERT_SINGLE = 1
+ *				                RETRY_INVERT_float = 1
  *				                RETRY_INVERT_DOUBLE = 2
  *		                                RETRY_INVERT_TRIPLE = 3
  *		                                RETRY_INVERT_TWO_SEP = 4
@@ -3282,73 +3289,40 @@ static const int gray2phase_v27[8] = { 1, 0, 2, 3, 6, 7, 5, 4 };
 
 // We are only using this for RUH modes
 
-void tone_gen_put_bit(int chan, int dat)
+void tone_gen_put_bit(int chan, int dat, int scramble)
 {
-	int modem_type = MODEM_SCRAMBLE;
 	int a = 0;
 
 	// scramble
 
-	int x;
+	if (scramble)
+	{
+		int x;
 
-	x = (dat ^ (lfsr[chan] >> 16) ^ (lfsr[chan] >> 11)) & 1;
-	lfsr[chan] = (lfsr[chan] << 1) | (x & 1);
-	dat = x;
+		x = (dat ^ (lfsr[chan] >> 16) ^ (lfsr[chan] >> 11)) & 1;
+		lfsr[chan] = (lfsr[chan] << 1) | (x & 1);
+		dat = x;
+	}
 
 	do {		/* until enough audio samples for this symbol. */
 
 		int sam;
 
-		switch (modem_type)
+		if (dat != prev_dat[chan])
 		{
-
-		case MODEM_AFSK:
-
-			// v1.7 reversed.
-			// Previously a data '1' selected the second (usually higher) tone.
-			// It never really mattered before because we were using NRZI.
-			// With the addition of IL2P, we need to be more careful.
-			// A data '1' should be the mark tone.
-
-			tone_phase[chan] += dat ? f1_change_per_sample[chan] : f2_change_per_sample[chan];
-			sam = sine_table[(tone_phase[chan] >> 24) & 0xff];
-			gen_tone_put_sample(chan, a, sam);
-			break;
-
-		case MODEM_QPSK:
-		case MODEM_8PSK:
-
 			tone_phase[chan] += f1_change_per_sample[chan];
-			sam = sine_table[(tone_phase[chan] >> 24) & 0xff];
-			gen_tone_put_sample(chan, a, sam);
-			break;
-
-		case MODEM_BASEBAND:
-		case MODEM_SCRAMBLE:
-		case MODEM_AIS:
-
-			if (dat != prev_dat[chan])
-			{
-				tone_phase[chan] += f1_change_per_sample[chan];
-			}
-			else
-			{
-				if (tone_phase[chan] & 0x80000000)
-					tone_phase[chan] = 0xc0000000;	// 270 degrees.
-				else
-					tone_phase[chan] = 0x40000000;	// 90 degrees.
-			}
-
-			sam = sine_table[(tone_phase[chan] >> 24) & 0xff];
-			gen_tone_put_sample(chan, a, sam);
-			break;
-
-		default:
-			text_color_set(DW_COLOR_ERROR);
-			dw_printf("INTERNAL ERROR: %s %d achan[%d].modem_type = %d\n",
-				__FILE__, __LINE__, chan, save_audio_config_p->achan[chan].modem_type);
-			exit(0);
 		}
+		else
+		{
+			if (tone_phase[chan] & 0x80000000)
+				tone_phase[chan] = 0xc0000000;	// 270 degrees.
+			else
+				tone_phase[chan] = 0x40000000;	// 90 degrees.
+		}
+
+		sam = sine_table[(tone_phase[chan] >> 24) & 0xff];
+		gen_tone_put_sample(chan, a, sam);
+
 
 		/* Enough for the bit time? */
 
@@ -3399,17 +3373,12 @@ void gen_tone_put_sample(int chan, int a, int sam)
 //    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
 
-static void send_byte_msb_first(int chan, int x, int polarity);
 
 static void send_control_nrzi(int, int);
 static void send_data_nrzi(int, int);
 static void send_bit_nrzi(int, int);
 
-
-
 static int number_of_bits_sent[MAX_CHANS];	// Count number of bits sent by "hdlc_send_frame" or "hdlc_send_flags"
-
-
 
 /*-------------------------------------------------------------
  *
@@ -3521,23 +3490,6 @@ static int ax25_only_hdlc_send_frame(int chan, unsigned char *fbuf, int flen, in
 }
 
 
-
-// The next one is only for IL2P.  No NRZI.
-// MSB first, opposite of AX.25.
-
-static void send_byte_msb_first(int chan, int x, int polarity)
-{
-	int i;
-
-	for (i = 0; i < 8; i++) {
-		int dbit = (x & 0x80) != 0;
-		tone_gen_put_bit(chan, (dbit ^ polarity) & 1);
-		x <<= 1;
-		number_of_bits_sent[chan]++;
-	}
-}
-
-
 // The following are only for HDLC.
 // All bits are sent NRZI.
 // Data (non flags) use bit stuffing.
@@ -3594,7 +3546,7 @@ static void send_bit_nrzi(int chan, int b)
 		output[chan] = !output[chan];
 	}
 
-	tone_gen_put_bit(chan, output[chan]);
+	tone_gen_put_bit(chan, output[chan], MODEM_SCRAMBLE);
 
 	number_of_bits_sent[chan]++;
 }
@@ -4034,7 +3986,7 @@ void dw9600ProcessSample(int snd_ch, short Sample)
 void init_RUH48(int snd_ch)
 {
 	modem_mode[snd_ch] = MODE_RUH;
-	rx_baudrate[snd_ch] = 4800;
+	tx_bitrate[snd_ch] = rx_baudrate[snd_ch] = 4800;
 
 	if (was_init[snd_ch] == 0)
 	{
@@ -4054,7 +4006,7 @@ void init_RUH48(int snd_ch)
 void init_RUH96(int snd_ch)
 {
 	modem_mode[snd_ch] = MODE_RUH;
-	rx_baudrate[snd_ch] = 9600;
+	tx_bitrate[snd_ch] =  rx_baudrate[snd_ch] = 9600;
 
 	if (was_init[snd_ch] == 0)
 	{
@@ -4077,16 +4029,163 @@ void text_color_set(dw_color_t c)
 	return;
 }
 
+typedef struct  TMChannel_t
+{
+
+	float prev_LPF1I_buf[4096];
+	float LPF1Q_buf[4096];
+	float prev_dLPFI_buf[4096];
+	float prev_dLPFQ_buf[4096];
+	float prev_AFCI_buf[4096];
+	float prev_AFCQ_buf[4096];
+	float AngleCorr;
+	float MUX_osc;
+	float AFC_IZ1;
+	float AFC_IZ2;
+	float AFC_QZ1;
+	float AFC_QZ2;
+	float AFC_bit_buf1I[1024];
+	float AFC_bit_buf1Q[1024];
+	float AFC_bit_buf2[1024];
+	float AFC_IIZ1;
+	float AFC_QQZ1;
+
+} TMChannel;
+
+
+typedef struct TFX25_t
+{
+	string  data;
+	uint8_t  status;
+	uint8_t  bit_cnt;
+	uint8_t  uint8_t_rx;
+	unsigned long long tag;
+	uint8_t  size;
+	uint8_t  rs_size;
+	uint8_t size_cnt;
+} TFX25;
+
+typedef struct TDetector_t
+{
+	struct TFX25_t fx25[4];
+	TStringList	mem_ARQ_F_buf[5];
+	TStringList mem_ARQ_buf[5];
+	float pll_loop[5];
+	float last_sample[5];
+	uint8_t ones[5];
+	uint8_t zeros[5];
+	float bit_buf[5][1024];
+	float bit_buf1[5][1024];
+	uint8_t sample_cnt[5];
+	uint8_t last_bit[5];
+	float PSK_IZ1[5];
+	float PSK_QZ1[5];
+	float PkAmpI[5];
+	float PkAmpQ[5];
+	float PkAmp[5];
+	float PkAmpMax[5];
+	int newpkpos[5];
+	float AverageAmp[5];
+	float AngleCorr[5];
+	float MinAmp[5];
+	float MaxAmp[5];
+	float MUX3_osc[5];
+	float MUX3_1_osc[5];
+	float MUX3_2_osc[5];
+	float Preemphasis6[5];
+	float Preemphasis12[5];
+	float PSK_AGC[5];
+	float AGC[5];
+	float AGC1[5];
+	float AGC2[5];
+	float AGC3[5];
+	float AGC_max[5];
+	float AGC_min[5];
+	float AFC_IZ1[5];
+	float AFC_IZ2[5];
+	float AFC_QZ1[5];
+	float AFC_QZ2[5];
+
+	uint8_t last_rx_bit[5];
+	uint8_t bit_stream[5];
+	uint8_t uint8_t_rx[5];
+	uint8_t bit_stuff_cnt[5];
+	uint8_t bit_cnt[5];
+	float bit_osc[5];
+	uint8_t frame_status[5];
+	string rx_data[5];
+	string FEC_rx_data[5];
+	//
+	uint8_t FEC_pol[5];
+	unsigned short FEC_err[5];
+	unsigned long long FEC_header1[5][2];
+	unsigned short FEC_blk_int[5];
+	unsigned short FEC_len_int[5];
+	unsigned short FEC_len[5];
+
+	unsigned short FEC_len_cnt[5];
+
+	uint8_t rx_intv_tbl[5][4];
+	uint8_t rx_intv_sym[5];
+	uint8_t rx_viterbi[5];
+	uint8_t viterbi_cnt[5];
+	//	  SurvivorStates [1..4,0..511] of TSurvivor;
+		  //
+	TMChannel MChannel[5][4];
+
+	float AFC_dF_avg[5];
+	float AFC_dF[5];
+	float AFC_bit_osc[5];
+	float AFC_bit_buf[5][1024];
+	unsigned short AFC_cnt[5];
+
+	string raw_bits1[5];
+	string raw_bits[5];
+	uint8_t last_nrzi_bit[5];
+
+	float BPF_core[5][2048];
+	float LPF_core[5][2048];
+
+	float src_INTR_buf[5][8192];
+	float src_INTRI_buf[5][8192];
+	float src_INTRQ_buf[5][8192];
+	float src_LPF1I_buf[5][8192];
+	float src_LPF1Q_buf[5][8192];
+
+	float src_BPF_buf[5][2048];
+	float src_Loop_buf[5][8192];
+	float prev_BPF_buf[5][4096];
+
+	float prev_LPF1I_buf[5][4096];
+	float prev_LPF1Q_buf[5][4096];
+	float prev_INTR_buf[5][16384];
+	float prev_INTRI_buf[5][16384];
+	float prev_INTRQ_buf[5][16384];
+
+	uint8_t emph_decoded;
+	uint8_t rx_decoded;
+	uint8_t errors;
+
+} TDetector;
+
 
 extern TStringList detect_list[5];
 extern TStringList detect_list_c[5];
+
+#define nr_emph 2
+extern struct TDetector_t  DET[nr_emph + 1][16];
+
+#define decodedNormal 4 //'-'
+#define decodedFEC    3 //'F'
+#define decodedMEM	  2 //'#'
+#define decodedSingle 1 //'$'
 
 
 int multi_modem_process_rec_frame(int chan, int subchan, int slice, unsigned char *fbuf, int flen, int alevel, int retries, int is_fx25)
 {
 	// Convert to QtSM internal format
 
-//	struct TDetector_t * pDET = &DET[emph][subchan];
+	struct TDetector_t * pDET = &DET[0][subchan];
 	string *  data = newString();
 	char Mode[16] = "RUH";
 	int i, found;
@@ -4100,7 +4199,7 @@ int multi_modem_process_rec_frame(int chan, int subchan, int slice, unsigned cha
 
 		freeString(data);
 		Debugprintf("Discarding copy rcvr %d emph %d", subchan, 0);
-		return;
+		return 0;
 	}
 
 	string * xx = newString();
@@ -4108,6 +4207,10 @@ int multi_modem_process_rec_frame(int chan, int subchan, int slice, unsigned cha
 
 	Add(&detect_list_c[chan], xx);
 	Add(&detect_list[chan], data);
+
+	pDET->rx_decoded = decodedNormal;
+	pDET->emph_decoded = decodedNormal;
+	pDET->errors = 0;
 
 	//	if (retries)
 	//		sprintf(Mode, "IP2P-%d", retries);
@@ -4137,12 +4240,51 @@ void RUHEncode(unsigned char * Data, int Len, int chan)
 
 	int bitcount;
 	int txdcount;
-	int j;
+	int i, j;
 	unsigned short CRC;
 
 	number_of_bits_sent[chan] = 0;
 
 	SampleNo = 0;
+
+	if (il2p_mode[chan] >= IL2P_MODE_TXRX)
+	{
+		// il2p generates TXDELAY as part of the frame, so just build frame
+
+		string * result;
+		packet_t pp = ax25_new();
+		int polarity = 0;
+
+		// Call il2p_send_frame to build the bit stream
+
+		pp->frame_len = Len;
+		memcpy(pp->frame_data, Data, Len + 2);	// Copy the crc in case we are going to send it
+
+		result = il2p_send_frame(chan, pp, 1, 0);
+
+		for (j = 0; j < result->Length; j++)
+		{
+			int x = result->Data[j];
+
+			for (i = 0; i < 8; i++) 
+			{
+				int dbit = (x & 0x80) != 0;
+				tone_gen_put_bit(chan, (dbit ^ polarity) & 1, 0);		// No Scramble
+				x <<= 1;
+				number_of_bits_sent[chan]++;
+			}
+		}
+
+		freeString(result);
+		ax25_delete(pp);
+
+		// sample No should now contain number of (stereo) samples
+
+		ARDOPTXLen[chan] = SampleNo;
+		ARDOPTXPtr[chan] = 0;
+
+		return;
+	}
 
 	// First do TX delay
 
