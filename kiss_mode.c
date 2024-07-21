@@ -22,20 +22,6 @@ along with QtSoundModem.  If not, see http://www.gnu.org/licenses
 
 #include "UZ7HOStuff.h"
 
-/*
-uses sysutils,classes;
-
-  procedure KISS_init;
-  procedure KISS_free;
-  procedure KISS_add_stream(socket: integer);
-  procedure KISS_del_stream(socket: integer);
-  procedure KISS_on_data_in(socket: integer; data: string);
-  procedure KISS_on_data_out(port: byte; frame: string);
-  procedure KISS_send_ack(port: byte; data: string);
-  procedure KISS_send_ack1(port: byte);
-*/
-// I don't like this. maybe fine for Dephi but overcomlicated for C
-
 // I think I need a struct for each connection, but a simple array of entries should be fine
 // My normal ** and count system
 // Each needs an input buffer of max size kiss frame and length (or maybe string is a good idea)
@@ -89,13 +75,14 @@ end;
 
 void KISS_add_stream(void * Socket)
 {
-	// Add a new connection. Called when QT accepts an incoming call}
+	// Add a new connection. Called wheKISSn QT accepts an incoming call}
 
 	TKISSMode * KISS;
 
 	KissConnections = realloc(KissConnections, (KISSConCount + 1) * sizeof(void *));
 
-	KISS = KissConnections[KISSConCount++] = malloc(sizeof(KISS));
+	KISS = KissConnections[KISSConCount++] = malloc(sizeof(*KISS));
+	memset(KISS, 0, sizeof(*KISS));
 
 	KISS->Socket = Socket;
 	KISS->data_in = newString();

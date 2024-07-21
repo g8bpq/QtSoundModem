@@ -74,8 +74,14 @@ private slots:
 	void preEmphAllDChanged(int state);
 	void menuChecked();
 	void onTEselectionChanged();
+	void StartWatchdog();
+	void StopWatchdog();
+	void PTTWatchdogExpired();
 	void clickedSlot();
 	void startCWIDTimerSlot();
+	void setWaterfallImage();
+	void setLevelImage();
+	void setConstellationImage(int chan, int Qual);
 
 protected:
 	 

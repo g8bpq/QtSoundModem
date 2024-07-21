@@ -383,6 +383,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="ARDOPC.c" />
+    <ClCompile Include="berlekamp.c" />
     <ClCompile Include="BusyDetect.c" />
     <ClCompile Include="Config.cpp" />
     <ClCompile Include="dw9600.c" />
@@ -406,7 +407,6 @@
     <ClCompile Include="ax25_fec.c" />
     <ClCompile Include="ax25_l2.c" />
     <ClCompile Include="ax25_mod.c" />
-    <ClCompile Include="berlekamp.c" />
     <ClCompile Include="galois.c" />
     <ClCompile Include="kiss_mode.c" />
     <ClCompile Include="main.cpp" />

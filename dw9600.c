@@ -23,6 +23,10 @@ typedef struct TStringList_T
 #include <stddef.h>
 #include "dw9600.h"
 
+#define stringAdd(s1, s2, c) mystringAdd(s1, s2, c, __FILE__, __LINE__)
+
+string * mystringAdd(string * Msg, unsigned char * Chars, int Count, char * FILE, int  LINE);
+
 extern int fx25_mode[4];
 extern int il2p_mode[4];
 extern int il2p_crc[4];

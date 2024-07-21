@@ -170,7 +170,6 @@ void SampleSink(int LR, short Sample)
 	{
 		DMABuffer[2 * Number] = Sample;
 		DMABuffer[1 + 2 * Number] = Sample;
-
 	}
 	else
 	{
@@ -537,14 +536,20 @@ void doCalib(int Chan, int Act)
 	if (Chan == 1 && calib_mode[0])
 		return;
 
-	calib_mode[Chan] = Act;
-
 	if (Act == 0)
 	{
+		calib_mode[Chan] = 0;
 		tx_status[Chan] = TX_SILENCE;		// Stop TX
 		Flush();
 		RadioPTT(Chan, 0);
 		Debugprintf("Stop Calib");
+	}
+	else
+	{
+		if (calib_mode[Chan] == 0)
+			SampleNo = 0;
+
+		calib_mode[Chan] = Act;
 	}
 }
 
@@ -681,7 +686,7 @@ void DoTX(int Chan)
 	if (tx_status[Chan] == TX_NO_DATA)
 	{
 		Flush();
-		Debugprintf("TX Complete");
+		Debugprintf("TX Complete %d", SampleNo);
 		RadioPTT(Chan, 0);
 		Continuation[Chan] = 0;
 
@@ -762,7 +767,7 @@ void DoTX(int Chan)
 					return;
 				}
 
-				Debugprintf("TX Complete");
+				Debugprintf("TX Complete %d", SampleNo); 
 				RadioPTT(Chan, 0);
 				Continuation[Chan] = 0;
 
@@ -954,7 +959,10 @@ BOOL useGPIO = FALSE;
 BOOL gotGPIO = FALSE;
 
 int HamLibPort = 4532;
-char HamLibHost[32] = "192.168.1.14";
+char HamLibHost[32] = "127.0.0.1";
+
+int FLRigPort = 12345;
+char FLRigHost[32] = "127.0.0.1";
 
 char CM108Addr[80] = "";
 
@@ -1128,6 +1136,12 @@ void OpenPTTPort()
 			HAMLIBSetPTT(0);			// to open port
 			return;
 		}
+		else if (stricmp(PTTPort, "FLRIG") == 0)
+		{
+			PTTMode |= PTTFLRIG;
+			FLRigSetPTT(0);			// to open port
+			return;
+		}
 
 		else		//  Not GPIO
 		{
@@ -1207,6 +1221,7 @@ void CM108_set_ptt(int PTTState)
 
 float amplitudes[4] = { 32000, 32000, 32000, 32000 };
 extern float amplitude;
+void startpttOnTimer();
 
 void RadioPTT(int snd_ch, BOOL PTTState)
 {
@@ -1216,11 +1231,13 @@ void RadioPTT(int snd_ch, BOOL PTTState)
 	{
 		txmax = txmin = 0;
 		amplitude = amplitudes[snd_ch];
+		StartWatchdog();
 	}
 	else
 	{
 		Debugprintf("Output peaks = %d, %d, amp %f", txmin, txmax, amplitude);
 		amplitudes[snd_ch] = amplitude;
+		StopWatchdog();
 	}
 
 #ifdef __ARM_ARCH
@@ -1230,7 +1247,7 @@ void RadioPTT(int snd_ch, BOOL PTTState)
 			gpioWrite(pttGPIOPinR, (pttGPIOInvert ? (1 - PTTState) : (PTTState)));
 		else
 			gpioWrite(pttGPIOPin, (pttGPIOInvert ? (1 - PTTState) : (PTTState)));
-
+		startpttOnTimer();
 		return;
 	}
 
@@ -1239,17 +1256,29 @@ void RadioPTT(int snd_ch, BOOL PTTState)
 	if ((PTTMode & PTTCM108))
 	{
 		CM108_set_ptt(PTTState);
+		startpttOnTimer();
 		return;
 	}
 	
 	if ((PTTMode & PTTHAMLIB))
 	{
 		HAMLIBSetPTT(PTTState);
+		startpttOnTimer();
 		return;
 	}
-	if (hPTTDevice == 0)
-		return;
 
+	if ((PTTMode & PTTFLRIG))
+	{
+		FLRigSetPTT(PTTState);
+		startpttOnTimer();
+		return;
+	}
+
+	if (hPTTDevice == 0)
+	{
+		startpttOnTimer();
+		return;
+	}
 	if ((PTTMode & PTTCAT))
 	{
 		if (PTTState)
@@ -1277,6 +1306,7 @@ void RadioPTT(int snd_ch, BOOL PTTState)
 				COMClearRTS(hPTTDevice);
 		}
 	}
+	startpttOnTimer();
 
 }
 

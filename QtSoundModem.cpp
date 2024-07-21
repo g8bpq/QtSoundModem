@@ -47,8 +47,10 @@ along with QtSoundModem.  If not, see http://www.gnu.org/licenses
 #include <QStandardItemModel>
 #include <QScrollBar>
 #include <QFontDialog>
+#include <QFile>
 #include "UZ7HOStuff.h"
 
+#include <time.h>
 
 QImage *Constellation[4];
 QImage *Waterfall = 0;
@@ -93,6 +95,8 @@ extern "C" char CaptureNames[16][256];
 extern "C" char PlaybackNames[16][256];
 
 extern "C" int SoundMode;
+extern "C" int onlyMixSnoop;
+
 extern "C" int multiCore;
 
 extern "C" int refreshModems;
@@ -111,6 +115,8 @@ extern "C" int MaxMagIndex;
 extern "C" int using48000;			// Set if using 48K sample rate (ie RUH Modem active)
 extern "C" int ReceiveSize;
 extern "C" int SendSize;		// 100 mS for now
+
+extern "C" int txLatency;
 
 extern "C"
 { 
@@ -132,6 +138,7 @@ extern "C"
 	void sendRSID(int Chan, int dropTX);
 	void RSIDinitfft();
 	void il2p_init(int il2p_debug);
+	void closeTraceLog();
 }
 
 void make_graph_buf(float * buf, short tap, QPainter * bitmap);
@@ -147,7 +154,7 @@ int FreqD = 1500;
 int DCD = 50;
 
 char CWIDCall[128] = "";
-extern "C" char CWIDMark[32] = "";
+extern "C" char CWIDMark[32];
 int CWIDInterval = 0;
 int CWIDLeft = 0;
 int CWIDRight = 0;
@@ -220,7 +227,12 @@ extern "C" int TXPort;
 extern char UDPHost[64];
 
 QTimer *cwidtimer;
+QTimer *PTTWatchdog;
+
 QWidget * mythis;
+
+QElapsedTimer pttOnTimer;
+
 
 
 QSystemTrayIcon * trayIcon = nullptr;
@@ -317,9 +329,6 @@ void QtSoundModem::resizeEvent(QResizeEvent* event)
 	QMainWindow::resizeEvent(event);
 
 	QRect r = geometry();
-
-	QRect r1 = ui.monWindow->geometry();
-	QRect r2 = ui.centralWidget->geometry();
 
 	int modemBoxHeight = 34;
 	
@@ -500,12 +509,19 @@ void DoPSKWindows()
 }
 
 QTimer *wftimer;
+extern "C" struct timespec pttclk;
 
 QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 {
 	QString family;
 	int csize;
 	QFont::Weight weight;
+
+#ifndef WIN32
+	clock_getres(CLOCK_MONOTONIC, &pttclk);
+	printf("CLOCK_MONOTONIC %d, %d\n", pttclk.tv_sec, pttclk.tv_nsec);
+#endif	
+
 
 	ui.setupUi(this);
 
@@ -759,6 +775,11 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 	QObject::connect(t, SIGNAL(updateDCD(int, int)), this, SLOT(doupdateDCD(int, int)), Qt::QueuedConnection);
 
 	QObject::connect(t, SIGNAL(startCWIDTimer()), this, SLOT(startCWIDTimerSlot()), Qt::QueuedConnection);
+	QObject::connect(t, SIGNAL(setWaterfallImage()), this, SLOT(setWaterfallImage()), Qt::QueuedConnection);
+	QObject::connect(t, SIGNAL(setLevelImage()), this, SLOT(setLevelImage()), Qt::QueuedConnection);
+	QObject::connect(t, SIGNAL(setConstellationImage(int, int)), this, SLOT(setConstellationImage(int, int)), Qt::QueuedConnection);
+	QObject::connect(t, SIGNAL(startWatchdog()), this, SLOT(StartWatchdog()), Qt::QueuedConnection);
+	QObject::connect(t, SIGNAL(stopWatchdog()), this, SLOT(StopWatchdog()), Qt::QueuedConnection);
 
 	connect(ui.RXOffsetA, SIGNAL(returnPressed()), this, SLOT(returnPressed()));
 	connect(ui.RXOffsetB, SIGNAL(returnPressed()), this, SLOT(returnPressed()));
@@ -771,11 +792,13 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 
 	wftimer = new QTimer(this);
 	connect(wftimer, SIGNAL(timeout()), this, SLOT(doRestartWF()));
-	wftimer->start(1000 * 300);
+//	wftimer->start(1000 * 300);
 
 	cwidtimer = new QTimer(this);
 	connect(cwidtimer, SIGNAL(timeout()), this, SLOT(CWIDTimer()));
 
+	PTTWatchdog = new QTimer(this);
+	connect(PTTWatchdog, SIGNAL(timeout()), this, SLOT(PTTWatchdogExpired()));
 
 	if (CWIDInterval && afterTraffic == false)
 		cwidtimer->start(CWIDInterval * 60000);
@@ -1023,7 +1046,7 @@ void QtSoundModem::clickedSlotI(int i)
 
 	if (strcmp(Name, "centerB") == 0)
 	{
-		if (i > 299)
+		if (i > 300)
 		{
 			QSettings * settings = new QSettings("QtSoundModem.ini", QSettings::IniFormat);
 			ui.centerB->setValue(Freq_Change(1, i));
@@ -1452,10 +1475,14 @@ void QtSoundModem::doModems()
 	Dlg->IL2PModeC->setCurrentIndex(il2p_mode[2]);
 	Dlg->IL2PModeD->setCurrentIndex(il2p_mode[3]);
 
-	Dlg->CRC_A->setChecked(il2p_crc[0]);
-	Dlg->CRC_B->setChecked(il2p_crc[1]);
-	Dlg->CRC_C->setChecked(il2p_crc[2]);
-	Dlg->CRC_D->setChecked(il2p_crc[3]);
+	Dlg->CRCTX_A->setChecked((il2p_crc[0] & 1));
+	Dlg->CRCRX_A->setChecked((il2p_crc[0] & 2));
+	Dlg->CRCTX_B->setChecked((il2p_crc[1] & 1));
+	Dlg->CRCRX_B->setChecked((il2p_crc[1] & 2));
+	Dlg->CRCTX_C->setChecked((il2p_crc[2] & 1));
+	Dlg->CRCRX_C->setChecked((il2p_crc[2] & 2));
+	Dlg->CRCTX_D->setChecked((il2p_crc[3] & 1));
+	Dlg->CRCRX_D->setChecked((il2p_crc[3] & 2));
 
 	Dlg->CWIDCall->setText(CWIDCall);
 	Dlg->CWIDInterval->setText(QString::number(CWIDInterval));
@@ -1681,10 +1708,21 @@ void QtSoundModem::modemSave()
 	il2p_mode[2] = Dlg->IL2PModeC->currentIndex();
 	il2p_mode[3] = Dlg->IL2PModeD->currentIndex();
 
-	il2p_crc[0] = Dlg->CRC_A->isChecked();
-	il2p_crc[1] = Dlg->CRC_B->isChecked();
-	il2p_crc[2] = Dlg->CRC_C->isChecked();
-	il2p_crc[3] = Dlg->CRC_D->isChecked();
+	il2p_crc[0] = Dlg->CRCTX_A->isChecked();
+	if (Dlg->CRCRX_A->isChecked())
+		il2p_crc[0] |= 2;
+
+	il2p_crc[1] = Dlg->CRCTX_B->isChecked();
+	if (Dlg->CRCRX_B->isChecked())
+		il2p_crc[1] |= 2;
+
+	il2p_crc[2] = Dlg->CRCTX_C->isChecked();
+	if (Dlg->CRCRX_C->isChecked())
+		il2p_crc[2] |= 2;
+
+	il2p_crc[3] = Dlg->CRCTX_D->isChecked();
+	if (Dlg->CRCRX_D->isChecked())
+		il2p_crc[3] |= 2;
 
 	recovery[0] = Dlg->recoverBitA->currentIndex();
 	recovery[1] = Dlg->recoverBitB->currentIndex();
@@ -1822,12 +1860,16 @@ char NewPTTPort[80];
 
 int newSoundMode = 0;
 int oldSoundMode = 0;
+int oldSnoopMix = 0;
+int newSnoopMix = 0;
 
 void QtSoundModem::SoundModeChanged(bool State)
 {
 	UNUSED(State);
 
 	// Mustn't change SoundMode until dialog is accepted
+
+	newSnoopMix = Dev->onlyMixSnoop->isChecked();
 
 	if (Dev->UDP->isChecked())
 		newSoundMode = 3;
@@ -1914,6 +1956,17 @@ void QtSoundModem::PTTPortChanged(int Selected)
 		Dev->PTTOn->setText(HamLibHost);
 		Dev->PTTOn->setVisible(true);
 	}
+	else if (strcmp(NewPTTPort, "FLRIG") == 0)
+	{
+		Dev->CM108Label->setVisible(true);
+		Dev->CM108Label->setText("FLRig Port");
+		Dev->VIDPID->setText(QString::number(FLRigPort));
+		Dev->VIDPID->setVisible(true);
+		Dev->PTTOnLab->setText("FLRig Host");
+		Dev->PTTOnLab->setVisible(true);
+		Dev->PTTOn->setText(FLRigHost);
+		Dev->PTTOn->setVisible(true);
+	}
 	else
 	{
 		Dev->RTSDTR->setVisible(true);
@@ -1974,26 +2027,35 @@ void QtSoundModem::doDevices()
 
 	newSoundMode = SoundMode;
 	oldSoundMode = SoundMode;
+	oldSnoopMix = newSnoopMix = onlyMixSnoop;
 
 #ifdef WIN32
 	Dev->ALSA->setText("WaveOut");
 	Dev->OSS->setVisible(0);
 	Dev->PULSE->setVisible(0);
-#endif
-
+	Dev->onlyMixSnoop->setVisible(0);
+	Dev->ALSA->setChecked(1);
+#else
 	if (SoundMode == 0)
+	{
+		Dev->onlyMixSnoop->setVisible(1);
 		Dev->ALSA->setChecked(1);
+	}
 	else if (SoundMode == 1)
 		Dev->OSS->setChecked(1);
 	else if (SoundMode == 2)
 		Dev->PULSE->setChecked(1);
 	else if (SoundMode == 2)
 		Dev->UDP->setChecked(1);
+#endif
+
+	Dev->onlyMixSnoop->setChecked(onlyMixSnoop);
 
 	connect(Dev->ALSA, SIGNAL(toggled(bool)), this, SLOT(SoundModeChanged(bool)));
 	connect(Dev->OSS, SIGNAL(toggled(bool)), this, SLOT(SoundModeChanged(bool)));
 	connect(Dev->PULSE, SIGNAL(toggled(bool)), this, SLOT(SoundModeChanged(bool)));
 	connect(Dev->UDP, SIGNAL(toggled(bool)), this, SLOT(SoundModeChanged(bool)));
+	connect(Dev->onlyMixSnoop, SIGNAL(toggled(bool)), this, SLOT(SoundModeChanged(bool)));
 
 	for (i = 0; i < PlaybackCount; i++)
 		Dev->outputDevice->addItem(&PlaybackNames[i][0]);
@@ -2024,6 +2086,8 @@ void QtSoundModem::doDevices()
 		i = Dev->inputDevice->findText(CaptureDevice, Qt::MatchContains);
 	}
 	Dev->inputDevice->setCurrentIndex(i);
+
+	Dev->txLatency->setText(QString::number(txLatency));
 
 	Dev->Modem_1_Chan->setCurrentIndex(soundChannel[0]);
 	Dev->Modem_2_Chan->setCurrentIndex(soundChannel[1]);
@@ -2101,6 +2165,7 @@ void QtSoundModem::doDevices()
 	//#endif
 
 	Dev->PTTPort->addItem("HAMLIB");
+	Dev->PTTPort->addItem("FLRIG");
 
 	for (const QString &info : items)
 	{
@@ -2186,7 +2251,7 @@ void QtSoundModem::deviceaccept()
 		}
 	}
 
-	if (oldSoundMode != newSoundMode)
+	if (oldSoundMode != newSoundMode || oldSnoopMix != newSnoopMix)
 	{
 		QMessageBox msgBox;
 
@@ -2201,6 +2266,7 @@ void QtSoundModem::deviceaccept()
 		if (i == QMessageBox::Ok)
 		{			
 			SoundMode = newSoundMode;
+			onlyMixSnoop = newSnoopMix;
 			saveSettings();
 
 			Closing = 1;
@@ -2229,6 +2295,12 @@ void QtSoundModem::deviceaccept()
 		cardChanged = 1;
 	}
 
+	if (onlyMixSnoop != Dev->onlyMixSnoop->isChecked())
+	{
+		onlyMixSnoop = Dev->onlyMixSnoop->isChecked();
+		cardChanged = 1;
+	}
+
 	CaptureIndex = Dev->inputDevice->currentIndex();
 
 	Q = Dev->outputDevice->currentText();
@@ -2240,6 +2312,9 @@ void QtSoundModem::deviceaccept()
 	}
 
 	PlayBackIndex = Dev->outputDevice->currentIndex();
+
+	Q = Dev->txLatency->text();
+	txLatency = Q.toInt();
 
 	soundChannel[0] = Dev->Modem_1_Chan->currentIndex();
 	soundChannel[1] = Dev->Modem_2_Chan->currentIndex();
@@ -2343,6 +2418,12 @@ void QtSoundModem::deviceaccept()
 		Q = Dev->PTTOn->text();
 		strcpy(HamLibHost, Q.toString().toUtf8());
 	}
+	else if (strcmp(PTTPort, "FLRIG") == 0)
+	{
+		FLRigPort = Q.toInt();
+		Q = Dev->PTTOn->text();
+		strcpy(FLRigHost, Q.toString().toUtf8());
+	}
 
 	Q = Dev->WaterfallMax->currentText();
 	newMax = Q.toInt();
@@ -2424,16 +2505,21 @@ void QtSoundModem::handleButton(int Port, int Type)
 
 
 
+
 void QtSoundModem::doRestartWF()
 {
-	if (inWaterfall)
+	return;
+
+	if (((tx_status[0] | tx_status[1] | tx_status[2] | tx_status[3]) != TX_SILENCE) || inWaterfall)
 	{
 		// in waterfall update thread
 
 		wftimer->start(5000);
 		return;
 	}
-		
+
+	wftimer->start(1000 * 300);
+	
 	lockWaterfall = true;
 
 	if (Firstwaterfall | Secondwaterfall)
@@ -2580,7 +2666,7 @@ void RefreshLevel(unsigned int Level, unsigned int LevelR)
 				RXLevel->setPixel(x, y, white);
 		}
 	}
-	RXLevelCopy->setPixmap(QPixmap::fromImage(*RXLevel));
+//	RXLevelCopy->setPixmap(QPixmap::fromImage(*RXLevel));
 
 	for (x = 0; x < 150; x++)
 	{
@@ -2599,7 +2685,10 @@ void RefreshLevel(unsigned int Level, unsigned int LevelR)
 				RXLevel2->setPixel(x, y, white);
 		}
 	}
-	RXLevel2Copy->setPixmap(QPixmap::fromImage(*RXLevel2));
+
+	emit t->setLevelImage();
+
+///	RXLevel2Copy->setPixmap(QPixmap::fromImage(*RXLevel2));
 }
 
 extern "C" unsigned char CurrentLevel;
@@ -2888,7 +2977,9 @@ extern "C" void displayWaterfall()
 	else
 		WaterfallCopy->setAlignment(Qt::AlignTop | Qt::AlignLeft);
 
-	WaterfallCopy->setPixmap(QPixmap::fromImage(*Waterfall));
+//	WaterfallCopy->setPixmap(QPixmap::fromImage(*Waterfall));
+
+	emit t->setWaterfallImage();
 }
 
 extern "C" float aFFTAmpl[1024];
@@ -2902,6 +2993,9 @@ void doWaterfallThread(void * param)
 		return;
 
 	if (Configuring)
+		return;
+
+	if (inWaterfall)
 		return;
 
 	inWaterfall = true;					// don't allow restart waterfall
@@ -3003,7 +3097,9 @@ void doWaterfallThread(void * param)
 
 	SMUpdateBusyDetector(snd_ch, RealOut, ImagOut);
 
-	// we always do fft so we can get centre freq and do busy detect. But only upodate waterfall if on display
+
+
+	// we always do fft so we can get centre freq and do busy detect. But only update waterfall if on display
 
 	if (bm == 0)
 	{
@@ -3042,6 +3138,8 @@ void doWaterfallThread(void * param)
 
 	// Scroll
 
+
+
 	int TopLine = NextWaterfallLine[snd_ch];
 	int TopScanLine = WaterfallHeaderPixels;
 
@@ -3053,10 +3151,24 @@ void doWaterfallThread(void * param)
 	memcpy(&WaterfallLines[snd_ch][NextWaterfallLine[snd_ch]++][0], Line, 4096);
 	if (NextWaterfallLine[snd_ch] > 79)
 		NextWaterfallLine[snd_ch] = 0;
+	
+	// Sanity check
+
+	if ((79 + TopScanLine) >= bm->height())
+	{
+		printf("Invalid WFMaxLine %d \n", bm->height());
+			exit(1);
+	}
+
 
 	for (int j = 79; j > 0; j--)
 	{
 		p = bm->scanLine(j + TopScanLine);
+		if (p == nullptr)
+		{
+			printf("Invalid WF Pointer \n");
+			exit(1);
+		}
 		memcpy(p, &WaterfallLines[snd_ch][TopLine][0], lineLen);
 		TopLine++;
 		if (TopLine > 79)
@@ -3065,6 +3177,26 @@ void doWaterfallThread(void * param)
 
 	inWaterfall = false;
 }
+
+void QtSoundModem::setWaterfallImage()
+{
+	ui.Waterfall->setPixmap(QPixmap::fromImage(*Waterfall));
+}
+
+void QtSoundModem::setLevelImage()
+{
+	RXLevelCopy->setPixmap(QPixmap::fromImage(*RXLevel));
+	RXLevel2Copy->setPixmap(QPixmap::fromImage(*RXLevel2));
+}
+
+void QtSoundModem::setConstellationImage(int chan, int Qual)
+{
+	char QualText[64];
+	sprintf(QualText, "Chan %c Qual = %d", chan + 'A', Qual);
+	QualLabel[chan]->setText(QualText);
+	constellationLabel[chan]->setPixmap(QPixmap::fromImage(*Constellation[chan]));
+}
+
 
 
 void QtSoundModem::changeEvent(QEvent* e)
@@ -3109,6 +3241,8 @@ void QtSoundModem::closeEvent(QCloseEvent *event)
 QtSoundModem::~QtSoundModem()
 {
 	qDebug() << "Saving Settings";
+
+	closeTraceLog();
 		
 	QSettings mysettings("QtSoundModem.ini", QSettings::IniFormat);
 	mysettings.setValue("geometry", saveGeometry());
@@ -3134,7 +3268,7 @@ void QtSoundModem::show_grid()
 
 	int  snd_ch, i, num_rows, row_idx;
 	QTableWidgetItem *item;
-	const char * msg;
+	const char * msg = "";
 
 	int  speed_tx, speed_rx;
 
@@ -3279,7 +3413,7 @@ void QtSoundModem::onTEselectionChanged()
 
 extern "C" int SMUpdatePhaseConstellation(int chan, float * Phases, float * Mags, int intPSKPhase, int Count)
 {
-	// Subroutine to update bmpConstellation plot for PSK modes...
+	// Subroutine to update Constellation plot for PSK modes...
 	// Skip plotting and calculations of intPSKPhase(0) as this is a reference phase (9/30/2014)
 
 	float dblPhaseError;
@@ -3347,13 +3481,121 @@ extern "C" int SMUpdatePhaseConstellation(int chan, float * Phases, float * Mags
 
 	if (nonGUIMode == 0)
 	{
-		char QualText[64];
-		sprintf(QualText, "Chan %c Qual = %d", chan + 'A', intQuality);
-		QualLabel[chan]->setText(QualText);
-		constellationLabel[chan]->setPixmap(QPixmap::fromImage(*Constellation[chan]));
+		emit t->setConstellationImage(chan, intQuality);
+//		char QualText[64];
+//		sprintf(QualText, "Chan %c Qual = %d", chan + 'A', intQuality);
+//		QualLabel[chan]->setText(QualText);
+//		constellationLabel[chan]->setPixmap(QPixmap::fromImage(*Constellation[chan]));
 	}
 	return intQuality;
 }
 
+
+QFile tracefile("Tracelog.txt");
+
+
+extern "C" int openTraceLog()
+{
+	if (!tracefile.open(QIODevice::Append | QIODevice::Text))
+		return 0;
+
+	return 1;
+}
+
+extern "C" qint64 writeTraceLog(char * Data, char Dirn)
+{
+	return tracefile.write(Data);
+}
+
+extern "C" void closeTraceLog()
+{
+	tracefile.close();
+}
+
+extern "C" void debugTimeStamp(char * Text, char Dirn)
+{
+#ifndef LOGTX
+
+	if (Dirn == 'T')
+		return;
+
+#endif
+
+#ifndef LOGRX
+
+	if (Dirn == 'R')
+		return;
+
+#endif
+
+
+	QTime Time(QTime::currentTime());
+	QString String = Time.toString("hh:mm:ss.zzz");
+	char Msg[2048];
+
+	sprintf(Msg, "%s %s\n", String.toUtf8().data(), Text);
+	qint64 ret = writeTraceLog(Msg, Dirn);
+}
+
+
+
+// Timer functions need to run in GUI Thread
+
+extern "C" int SampleNo;
+
+
+extern "C" int pttOnTime()
+{
+	return pttOnTimer.elapsed();
+}
+
+extern "C" void startpttOnTimer()
+{
+	pttOnTimer.start();
+}
+
+
+extern "C" void StartWatchdog()
+{
+	// Get Monotonic clock for PTT drop time calculation
+
+#ifndef WIN32
+	clock_gettime(CLOCK_MONOTONIC, &pttclk);
+#endif	
+	debugTimeStamp((char *)"PTT On", 'T');
+	emit t->startWatchdog();
+	pttOnTimer.start();
+}
+
+extern "C" void StopWatchdog()
+{
+	int txlenMs = (1000 * SampleNo / TX_Samplerate);
+
+	Debugprintf("Samples Sent %d, Calc Time %d, PTT Time %d", SampleNo, txlenMs, pttOnTime());
+	debugTimeStamp((char *)"PTT Off", 'T');
+	closeTraceLog();
+	openTraceLog();
+	debugTimeStamp((char *)"Log Reopened", 'T');
+
+	emit t->stopWatchdog();
+}
+
+
+
+void QtSoundModem::StartWatchdog()
+{
+	PTTWatchdog->start(60 * 1000);
+}
+
+ void QtSoundModem::StopWatchdog()
+{
+	 PTTWatchdog->stop();
+}
+
+
+ void QtSoundModem::PTTWatchdogExpired()
+ {
+	 PTTWatchdog->stop();
+ }
 
 

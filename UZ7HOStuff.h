@@ -4,8 +4,11 @@
 //	 My port of UZ7HO's Soundmodem
 //
 
-#define VersionString "0.0.0.72 Beta 1"
+#define VersionString "0.0.0.72"
 #define VersionBytes {0, 0, 0, 72}
+
+//#define LOGTX
+//#define LOGRX
 
 // Added FX25. 4x100 FEC and V27 not Working and disabled
 
@@ -179,6 +182,25 @@
 //		Report and set fx.25 and il2p flags to/from BPQ
 
 // .72	Fix IL2P for RUH modems
+//		Fix crash when closing in non-gui mode
+//		Fix loop in chk_dcd1
+//		Change method of timing PTT
+//		Add FLRIG PTT Support
+
+// Beta 13 revert to new ptt timing
+// Beta 14 Add display of mix/snoop devices
+
+//		Change phase map of QPSK3600 mode to match Nino TNC
+
+
+
+// As far as I can see txtail is only there to make sure all bits get through the tx filter,
+// so it shouldn't really matter what is sent. Code worked in characters, so resolution of txtail
+// is 24 mS at 300 baud. I don't see why I can't work in bits, or even samples. Any reason why I shouldn't send
+// a single tone during tail? . 
+//
+//	I'm currently sending reversals with timing resolution of bits (~3 mS at 300 baud)
+
 
 
 #include <string.h>
@@ -511,6 +533,7 @@ typedef struct TAX25Port_t
 #define PTTCAT		4
 #define PTTCM108	8
 #define PTTHAMLIB	16
+#define PTTFLRIG	32
 
 // Status flags
 
@@ -654,9 +677,9 @@ extern int SendSize;
 #define MODEM_Q2400_BPF_TAP 256 //256
 #define MODEM_Q2400_LPF_TAP 128  //128
  //
-#define MODEM_Q3600_BPF 3600
-#define MODEM_Q3600_TXBPF 3750
-#define MODEM_Q3600_LPF 1350
+#define MODEM_Q3600_BPF 1800
+#define MODEM_Q3600_TXBPF 2000
+#define MODEM_Q3600_LPF 600
 #define MODEM_Q3600_BPF_TAP 256
 #define MODEM_Q3600_LPF_TAP 128
  //
@@ -947,6 +970,8 @@ extern int PID;
 extern char CM108Addr[80];
 extern int HamLibPort;
 extern char HamLibHost[];
+extern int FLRigPort;
+extern char FLRigHost[];
 
 extern int SCO;
 extern int DualPTT;
@@ -1060,6 +1085,7 @@ void AGW_Raw_monitor(int snd_ch, string * data);
 // Delphi emulation functions
 
 string * Strings(TStringList * Q, int Index);
+void replaceString(TStringList * Q, int Index, string * item);
 void Clear(TStringList * Q);
 int Count(TStringList * List);
 
@@ -1139,6 +1165,10 @@ struct il2p_context_s {
 };
 
 extern int NeedWaterfallHeaders;
+
+#define stringAdd(s1, s2, c) mystringAdd(s1, s2, c, __FILE__, __LINE__)
+
+string * mystringAdd(string * Msg, UCHAR * Chars, int Count, char * FILE, int  LINE);
 
 #ifdef __cplusplus
 }

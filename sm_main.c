@@ -74,8 +74,8 @@ int Channels = 2;
 int BitsPerSample = 16;
 float TX_Samplerate = 12000;
 float RX_Samplerate = 12000;
-int RX_SR = 11025;
-int TX_SR = 11025;
+//int RX_SR = 11025;
+//int TX_SR = 11025;
 int RX_PPM = 0;
 int TX_PPM = 0;
 int tx_bufsize = 512;
@@ -448,11 +448,12 @@ void init_Q4800(int snd_ch)
 
 void init_Q3600(int snd_ch)
 {
-	qpsk_set[snd_ch].mode = QPSK_SM;
+	qpsk_set[snd_ch].mode = QPSK_V26; // QPSK_SM;
 	modem_mode[snd_ch] = MODE_QPSK;
 	rx_shift[snd_ch] = 1800;
 	rx_baudrate[snd_ch] = 1800;
 	tx_bitrate[snd_ch] = 3600;
+	pskStates[snd_ch] = 4;
 	if (modem_def[snd_ch])
 		get_filter_values(snd_ch);
 }
@@ -1041,7 +1042,10 @@ void BufferFull(short * Samples, int nSamples)			// These are Stereo Samples
 
 		// We need to run the waterfall FFT for the frequency guessing to work
 
+
 		int FirstWaterfallChan = 0;
+
+
 		short * ptr1 = &fft_buf[0][fftCount];
 		short * ptr2 = &fft_buf[1][fftCount];
 
@@ -1087,7 +1091,7 @@ void BufferFull(short * Samples, int nSamples)			// These are Stereo Samples
 					data2 += 2;
 				}
 				if (((Toggle & 1) == 0))
-					doWaterfall(1);
+				doWaterfall(1);
 			}
 
 			if (Firstwaterfall || Secondwaterfall)

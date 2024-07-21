@@ -189,7 +189,7 @@ void AGW_del_socket(void * socket)
 void AGW_add_socket(void * socket)
 {
 	AGWUser * User = (struct AGWUser_t *)malloc(sizeof(struct AGWUser_t));			// One Client
-	memset(User, 0, sizeof(struct AGWUser_t));
+	
 
 	AGWUsers = realloc(AGWUsers, (AGWConCount + 1) * sizeof(void *));
 	

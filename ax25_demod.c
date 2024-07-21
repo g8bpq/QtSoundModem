@@ -335,7 +335,7 @@ void chk_dcd1(int snd_ch, int buf_size)
 	//  ? does this work as Andy passes aborted frames to decoder
 
 	Byte port;
-	word  i;
+	int  i;
 	single  tick;
 	word  active;
 	boolean  ind_dcd;
@@ -423,9 +423,9 @@ void chk_dcd1(int snd_ch, int buf_size)
 
 		if (TX_rotate)
 		{
-			for (int i = 0; i < 4; i++)
+			for (int n = 0; n < 4; n++)
 			{
-				if (snd_status[i] == SND_TX)
+				if (snd_status[n] == SND_TX)
 					dcd[snd_ch] = TRUE;
 			}
 		}
@@ -435,7 +435,7 @@ void chk_dcd1(int snd_ch, int buf_size)
 
 		if (!dcd[snd_ch] && resptime_tick[snd_ch] >= resptime[snd_ch])
 		{
-			i = 0;
+			int n = 0;
 
 			port = new_tx_port[snd_ch];
 			do
@@ -463,9 +463,9 @@ void chk_dcd1(int snd_ch, int buf_size)
 				if (all_frame_buf[snd_ch].Count > 0)
 					new_tx_port[snd_ch] = port;
 
-				i++;
+				n++;
 
-			} while (all_frame_buf[snd_ch].Count == 0 && i < port_num);
+			} while (all_frame_buf[snd_ch].Count == 0 && n < port_num);
 
 			// Add KISS frames
 
@@ -475,7 +475,7 @@ void chk_dcd1(int snd_ch, int buf_size)
 
 				if (all_frame_buf[snd_ch].Count > 0)
 				{
-					for (n = 0; n < all_frame_buf[snd_ch].Count; n++)
+					for (int n = 0; n < all_frame_buf[snd_ch].Count; n++)
 					{
 						KISS_on_data_out(snd_ch, Strings(&all_frame_buf[snd_ch], n), 1);	// Mon TX
 					}
@@ -485,14 +485,14 @@ void chk_dcd1(int snd_ch, int buf_size)
 
 				if (KISS.buffer[snd_ch].Count > 0)
 				{
-					for (n = 0; n < KISS.buffer[snd_ch].Count; n++)
+					for (int k = 0; k < KISS.buffer[snd_ch].Count; k++)
 					{
 						if (AGWServ)
 							AGW_Raw_monitor(snd_ch, Strings(&KISS.buffer[snd_ch], n));
 
 						// Need to add copy as clear will free original
 
-						Add(&all_frame_buf[snd_ch], duplicateString(Strings(&KISS.buffer[snd_ch], n)));
+						Add(&all_frame_buf[snd_ch], duplicateString(Strings(&KISS.buffer[snd_ch], k)));
 					}
 					Clear(&KISS.buffer[snd_ch]);
 				}

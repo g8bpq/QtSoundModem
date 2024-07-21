@@ -5,7 +5,7 @@
 
 #define ARDOPBufferSize 12000 * 100
 
-extern char CWIDMark[32];
+char CWIDMark[32] = "";
 
 extern short ARDOPTXBuffer[4][ARDOPBufferSize];	// Enough to hold whole frame of samples
 

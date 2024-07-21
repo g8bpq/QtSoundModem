@@ -1,4 +1,4 @@
-/*extern "C" 
+/*
 Copyright (C) 2019-2020 Andrei Kopanchuk UZ7HO
 
 This file is part of QtSoundModem
@@ -29,8 +29,12 @@ extern "C" void get_exclude_list(char * line, TStringList * list);
 extern "C" void get_exclude_frm(char * line, TStringList * list);
 
 extern "C" int SoundMode; 
-extern "C" int RX_SR;
-extern "C" int TX_SR;
+extern "C" int onlyMixSnoop;
+
+//extern "C" int RX_SR;
+//extern "C" int TX_SR;
+extern "C" int txLatency;
+
 extern "C" int multiCore;
 extern "C" char * Wisdom;
 extern int WaterfallMin;
@@ -59,6 +63,10 @@ extern bool darkTheme;
 extern "C" int RSID_SABM[4];
 extern "C" int RSID_UI[4];
 extern "C" int RSID_SetModem[4];
+
+extern "C" int nonGUIMode;
+
+
 
 extern QFont Font;
 
@@ -139,8 +147,12 @@ void getSettings()
 	strcpy(UDPHost, settings->value("Init/UDPHost", "192.168.1.255").toString().toUtf8());
 	UDPServ = settings->value("Init/UDPServer", FALSE).toBool();
 
-	RX_SR = settings->value("Init/RXSampleRate", 12000).toInt();
-	TX_SR = settings->value("Init/TXSampleRate", 12000).toInt();
+//	RX_SR = settings->value("Init/RXSampleRate", 12000).toInt();
+//	TX_SR = settings->value("Init/TXSampleRate", 12000).toInt();
+	txLatency = settings->value("Init/txLatency", 50).toInt();
+
+
+	onlyMixSnoop = settings->value("Init/onlyMixSnoop", 0).toInt();
 
 	strcpy(CaptureDevice, settings->value("Init/SndRXDeviceName", "hw:1,0").toString().toUtf8());
 	strcpy(PlaybackDevice, settings->value("Init/SndTXDeviceName", "hw:1,0").toString().toUtf8());
@@ -165,6 +177,10 @@ void getSettings()
 
 	HamLibPort = settings->value("Init/HamLibPort", 4532).toInt();
 	strcpy(HamLibHost, settings->value("Init/HamLibHost", "127.0.0.1").toString().toUtf8());
+
+	FLRigPort = settings->value("Init/FLRigPort", 12345).toInt();
+	strcpy(FLRigHost, settings->value("Init/FLRigHost", "127.0.0.1").toString().toUtf8());
+
 
 	DualPTT = settings->value("Init/DualPTT", 1).toInt();
 	TX_rotate = settings->value("Init/TXRotate", 0).toInt();
@@ -209,8 +225,8 @@ void getSettings()
 	KISSServ = settings->value("KISS/Server", FALSE).toBool();
 	KISSPort = settings->value("KISS/Port", 8105).toInt();
 
-	RX_Samplerate = RX_SR + RX_SR * 0.000001*RX_PPM;
-	TX_Samplerate = TX_SR + TX_SR * 0.000001*TX_PPM;
+//	RX_Samplerate = RX_SR + RX_SR * 0.000001*RX_PPM;
+//	TX_Samplerate = TX_SR + TX_SR * 0.000001*TX_PPM;
 
 	emph_all[0] = settings->value("Modem/PreEmphasisAll1", FALSE).toBool();
 	emph_all[1] = settings->value("Modem/PreEmphasisAll2", FALSE).toBool();
@@ -365,7 +381,9 @@ void saveSettings()
 	settings->setValue("PointSize", Font.pointSize());
 	settings->setValue("Weight", Font.weight());
 
-	settings->setValue("PSKWindow", constellationDialog->geometry());
+	if (nonGUIMode == 0)
+		settings->setValue("PSKWindow", constellationDialog->geometry());
+
 	settings->setValue("Init/SoundMode", SoundMode);
 	settings->setValue("Init/UDPClientPort", UDPClientPort);
 	settings->setValue("Init/UDPServerPort", UDPServerPort);
@@ -375,9 +393,12 @@ void saveSettings()
 	settings->setValue("Init/UDPHost", UDPHost);
 
 
-	settings->setValue("Init/TXSampleRate", TX_SR);
-	settings->setValue("Init/RXSampleRate", RX_SR);
+//	settings->setValue("Init/TXSampleRate", TX_SR);
+//	settings->setValue("Init/RXSampleRate", RX_SR);
+	settings->setValue("Init/txLatency", txLatency);
 
+	settings->setValue("Init/onlyMixSnoop", onlyMixSnoop);
+	
 	settings->setValue("Init/SndRXDeviceName", CaptureDevice);
 	settings->setValue("Init/SndTXDeviceName", PlaybackDevice);
 
@@ -400,6 +421,9 @@ void saveSettings()
 	settings->setValue("Init/CM108Addr", CM108Addr);
 	settings->setValue("Init/HamLibPort", HamLibPort);
 	settings->setValue("Init/HamLibHost", HamLibHost);
+	settings->setValue("Init/FLRigPort", FLRigPort);
+	settings->setValue("Init/FLRigHost", FLRigHost);
+
 	settings->setValue("Init/MinimizetoTray", MintoTray);
 	settings->setValue("Init/multiCore", multiCore);
 	settings->setValue("Init/Wisdom", Wisdom);

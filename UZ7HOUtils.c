@@ -96,10 +96,22 @@ void freeString(string * Msg)
 
 string * Strings(TStringList * Q, int Index)
 {
+	// Gets string at index in stringlist
+
 	if (Index >= Q->Count)
 		return NULL;
 
 	return Q->Items[Index];
+}
+
+void replaceString(TStringList * Q, int Index, string * item)
+{
+	// Gets string at index in stringlist
+
+	if (Index >= Q->Count)
+		return;
+
+	Q->Items[Index] = item;
 }
 
 int Add(TStringList * Q, string * Entry)
@@ -166,14 +178,25 @@ void setlength(string * Msg, int Count)
 	Msg->Length = Count;
 }
 
-string * stringAdd(string * Msg, UCHAR * Chars, int Count)
+string * mystringAdd(string * Msg, UCHAR * Chars, int Count, char * FILE, int  LINE)
 {
 	// Add Chars to string 
+
+	if (Count < 0 || Count > 65536)
+	{
+		printf("stringAdd Strange Count %d called from %s %d\r\n", Count, FILE, LINE);
+	}
 
 	if (Msg->Length + Count > Msg->AllocatedLength)
 	{
 		Msg->AllocatedLength += Count + 256;
 		Msg->Data = realloc(Msg->Data, Msg->AllocatedLength);
+	}
+
+	if (Msg->Data == 0)
+	{
+		printf("realloc failed\r\n");
+		exit(1);
 	}
 
 	memcpy(&Msg->Data[Msg->Length], Chars, Count);

@@ -42,10 +42,19 @@ along with QtSoundModem.  If not, see http://www.gnu.org/licenses
 
 #define VOID void
 
+char * strlop(char * buf, char delim);
+
+int gethints();
+
+struct timespec pttclk;
+
 extern int Closing;
 
 int SoundMode = 0;
 int stdinMode = 0;
+int onlyMixSnoop = 0;
+
+int txLatency;
 
 //#define SHARECAPTURE		// if defined capture device is opened and closed for each transission
 
@@ -291,10 +300,10 @@ void platformInit()
 
 void txSleep(int mS)
 {
-	// called while waiting for next TX buffer or to delay response.
-	// Run background processes
-
 	// called while waiting for next TX buffer. Run background processes
+
+	if (mS < 0)
+		return;
 
 	while (mS > 50)
 	{
@@ -626,7 +635,8 @@ int OpenSoundPlayback(char * PlaybackDevice, int m_sampleRate, int channels, int
 {
 	int err = 0;
 
-	char buf1[100];
+	char buf1[256];
+	char buf2[256];
 	char * ptr;
 
 	if (playhandle)
@@ -638,17 +648,19 @@ int OpenSoundPlayback(char * PlaybackDevice, int m_sampleRate, int channels, int
 	strcpy(SavedPlaybackDevice, PlaybackDevice);	// Saved so we can reopen in error recovery
 	SavedPlaybackRate = m_sampleRate;
 
-	if (strstr(PlaybackDevice, "plug") == 0 && strchr(PlaybackDevice, ':'))
-		sprintf(buf1, "plug%s", PlaybackDevice);
+	strcpy(buf2, PlaybackDevice);
+
+	ptr = strchr(buf2, ' ');
+	if (ptr) *ptr = 0;				// Get Device part of name
+
+
+	if (strstr(buf2, "plug") == 0 && strchr(buf2, ':'))
+		sprintf(buf1, "plug%s", buf2);
 	else
-		strcpy(buf1, PlaybackDevice);
+		strcpy(buf1, buf2);
 	
 	if (Report)
 		Debugprintf("Real Device %s", buf1);
-
-
-	ptr = strchr(buf1, ' ');
-	if (ptr) *ptr = 0;				// Get Device part of name
 
 	snd_pcm_hw_params_t *hw_params;
 	
@@ -734,7 +746,9 @@ int OpenSoundCapture(char * CaptureDevice, int m_sampleRate, int Report)
 {
 	int err = 0;
 
-	char buf1[100];
+	char buf1[256];
+	char buf2[256];
+
 	char * ptr;
 	snd_pcm_hw_params_t *hw_params;
 
@@ -755,16 +769,19 @@ int OpenSoundCapture(char * CaptureDevice, int m_sampleRate, int Report)
 	strcpy(SavedCaptureDevice, CaptureDevice);	// Saved so we can reopen in error recovery
 	SavedCaptureRate = m_sampleRate;
 
-	if (strstr(CaptureDevice, "plug") == 0 && strchr(CaptureDevice, ':'))
-		sprintf(buf1, "plug%s", CaptureDevice);
+	strcpy(buf2, CaptureDevice);
+
+	ptr = strchr(buf2, ' ');
+	if (ptr) *ptr = 0;				// Get Device part of name
+
+	if (strstr(buf2, "plug") == 0 && strchr(buf2, ':'))
+		sprintf(buf1, "plug%s", buf2);
 	else
-		strcpy(buf1, CaptureDevice);
+		strcpy(buf1, buf2);
 
 	if (Report)
 		Debugprintf("Real Device %s", buf1);
 
-	ptr = strchr(buf1, ' ');
-	if (ptr) *ptr = 0;				// Get Device part of name
 	
 	if ((err = snd_pcm_open (&rechandle, buf1, SND_PCM_STREAM_CAPTURE, 0)) < 0) {
 		Debugprintf("cannot open capture audio device %s (%s)",  buf1, snd_strerror(err));
@@ -882,16 +899,13 @@ int OpenSoundCapture(char * CaptureDevice, int m_sampleRate, int Report)
 	if (Report)
 		Debugprintf("Capture using %d channels", m_recchannels);
 
-	int i;
 	short buf[256];
 
-	for (i = 0; i < 10; ++i)
+	if ((err = snd_pcm_readi(rechandle, buf, 12)) != 12)
 	{
-		if ((err = snd_pcm_readi (rechandle, buf, 128)) != 128)
-		{
-			Debugprintf("read from audio interface failed (%s)", snd_strerror (err));
-		}
+		Debugprintf("read from audio interface failed (%s)", snd_strerror(err));
 	}
+
 
 //	Debugprintf("Read got %d", err);
 
@@ -957,11 +971,11 @@ int SoundCardWrite(short * input, int nSamples)
 
 	//	Stop Capture
 
-	if (rechandle)
-	{
-		snd_pcm_close(rechandle);
-		rechandle = NULL;
-	}
+//	if (rechandle)
+//	{
+//		snd_pcm_close(rechandle);
+//		rechandle = NULL;
+//	}
 
 	avail = snd_pcm_avail_update(playhandle);
 //	Debugprintf("avail before play returned %d", (int)avail);
@@ -1189,30 +1203,37 @@ short * SoundInit();
 
 void GetSoundDevices()
 {
-	if (SoundMode == 0)
+	if (onlyMixSnoop)
 	{
-		GetInputDeviceCollection();
-		GetOutputDeviceCollection();
+		gethints();
 	}
-	else if (SoundMode == 1)
+	else
 	{
-		PlaybackCount = 3;
+		if (SoundMode == 0)
+		{
+			GetInputDeviceCollection();
+			GetOutputDeviceCollection();
+		}
+		else if (SoundMode == 1)
+		{
+			PlaybackCount = 3;
 
-		strcpy(&PlaybackNames[0][0], "/dev/dsp0");
-		strcpy(&PlaybackNames[1][0], "/dev/dsp1");
-		strcpy(&PlaybackNames[2][0], "/dev/dsp2");
+			strcpy(&PlaybackNames[0][0], "/dev/dsp0");
+			strcpy(&PlaybackNames[1][0], "/dev/dsp1");
+			strcpy(&PlaybackNames[2][0], "/dev/dsp2");
 
-		CaptureCount = 3;
+			CaptureCount = 3;
 
-		strcpy(&CaptureNames[0][0], "/dev/dsp0");
-		strcpy(&CaptureNames[1][0], "/dev/dsp1");
-		strcpy(&CaptureNames[2][0], "/dev/dsp2");
-	}
-	else if (SoundMode == 2)
-	{
-		// Pulse
+			strcpy(&CaptureNames[0][0], "/dev/dsp0");
+			strcpy(&CaptureNames[1][0], "/dev/dsp1");
+			strcpy(&CaptureNames[2][0], "/dev/dsp2");
+		}
+		else if (SoundMode == 2)
+		{
+			// Pulse
 
-		listpulse();
+			listpulse();
+		}
 	}
 }
 
@@ -1300,7 +1321,18 @@ void PollReceivedSamples()
 		// if still not enough, too bad!
 
 		if (bytes != ReceiveSize * 2)
+		{
+			// This seems to happen occasionally even when we shouldn't be in stdin mode. Exit
+
 			Debugprintf("Short Read %d", bytes);
+			closeTraceLog();
+
+			Closing = TRUE;
+
+			sleep(1);
+			exit(1);
+		}
+
 
 		// convert to stereo
 
@@ -1338,7 +1370,7 @@ void PollReceivedSamples()
 		{
 				lastlevelGUI = Now;
 
-			if ((Now - lastlevelreport) > 10000)	// 10 Secs
+			if ((Now - lastlevelreport) > 60000)	// 60 Secs
 			{
 				char HostCmd[64];
 				lastlevelreport = Now;
@@ -1403,6 +1435,11 @@ short * SoundInit()
 	
 //	Called at end of transmission
 
+int useTimedPTT = 1;
+
+extern int SampleNo;
+int pttOnTime();
+
 void SoundFlush()
 {
 	// Append Trailer then send remaining samples
@@ -1418,43 +1455,71 @@ void SoundFlush()
 
 	// Wait for tx to complete
 
-	Debugprintf("Flush Soundmode = %d", SoundMode);
+//	Debugprintf("Flush Soundmode = %d", SoundMode);
 
 	if (SoundMode == 0)		// ALSA
 	{
-		usleep(100000);
-
-		while (1 && playhandle)
+		if (useTimedPTT)
 		{
-			snd_pcm_sframes_t avail = snd_pcm_avail_update(playhandle);
+			// Calulate PTT Time from Number of samples and samplerate
 
-			//		Debugprintf("Waiting for complete. Avail %d Max %d", avail, MaxAvail);
+			// samples sent is is in SampleNo, Time PTT was raised in timeval pttclk
+			// txLatency is extra ptt time to compenstate for time soundcard takes to start outputting samples
 
-			snd_pcm_status_alloca(&status);					// alloca allocates once per function, does not need a free
+			struct timespec pttnow;
 
-//			Debugprintf("Waiting for complete. Avail %d Max %d last %d", avail, MaxAvail, lastavail);
+			clock_gettime(CLOCK_MONOTONIC, &pttnow);
 
-			if ((err = snd_pcm_status(playhandle, status)) != 0)
+			time_t pttontimemS = (pttclk.tv_sec * 1000) + (pttclk.tv_nsec / 1000000);
+			time_t nowtimemS = (pttnow.tv_sec * 1000) + (pttnow.tv_nsec / 1000000);
+						
+			// We have already added latency to tail, so don't add again
+
+			int txlenMs = (1000 * SampleNo / TX_Samplerate);		// 12000 samples per sec. 
+
+			Debugprintf("Tx Time %d Time till end = %d", txlenMs, (nowtimemS - pttontimemS));
+
+			txSleep(txlenMs - (nowtimemS - pttontimemS));
+
+		}
+		else
+		{
+			usleep(100000);
+
+			while (1 && playhandle)
 			{
-				Debugprintf("snd_pcm_status() failed: %s", snd_strerror(err));
-				break;
+				snd_pcm_sframes_t avail = snd_pcm_avail_update(playhandle);
+
+				//		Debugprintf("Waiting for complete. Avail %d Max %d", avail, MaxAvail);
+
+				snd_pcm_status_alloca(&status);					// alloca allocates once per function, does not need a free
+
+	//			Debugprintf("Waiting for complete. Avail %d Max %d last %d", avail, MaxAvail, lastavail);
+
+				if ((err = snd_pcm_status(playhandle, status)) != 0)
+				{
+					Debugprintf("snd_pcm_status() failed: %s", snd_strerror(err));
+					break;
+				}
+
+				res = snd_pcm_status_get_state(status);
+
+				//		Debugprintf("PCM Status = %d", res);
+
+				if (res != SND_PCM_STATE_RUNNING || lastavail == avail)			// If sound system is not running then it needs data
+	//			if (res != SND_PCM_STATE_RUNNING)				// If sound system is not running then it needs data
+		//		if (MaxAvail - avail < 100)	
+				{
+					// Send complete - Restart Capture
+
+					OpenSoundCapture(SavedCaptureDevice, SavedCaptureRate, 0);
+					break;
+				}
+				lastavail = avail;
+				usleep(50000);
 			}
 
-			res = snd_pcm_status_get_state(status);
 
-			//		Debugprintf("PCM Status = %d", res);
-
-			if (res != SND_PCM_STATE_RUNNING || lastavail == avail)			// If sound system is not running then it needs data
-//			if (res != SND_PCM_STATE_RUNNING)				// If sound system is not running then it needs data
-	//		if (MaxAvail - avail < 100)	
-			{
-				// Send complete - Restart Capture
-
-				OpenSoundCapture(SavedCaptureDevice, SavedCaptureRate, 0);
-				break;
-			}
-			lastavail = avail;
-			usleep(50000);
 		}
 		// I think we should turn round the link here. I dont see the point in
 		// waiting for MainPoll
@@ -1819,7 +1884,7 @@ VOID COMClearRTS(HANDLE fd)
 
 HANDLE OpenCOMPort(char * Port, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet, int Stopbits)
 {
-	char buf[100];
+	char buf[256];
 
 	//	Linux Version.
 
@@ -1927,4 +1992,120 @@ VOID CloseCOMPort(HANDLE fd)
 {
 	close(fd);
 }
+
+// "hints" processing for looking for SNOOP/MIX devices
+
+int gethints()
+{
+	const char *iface = "pcm";
+	void **hints;
+	char **n;
+	int err;
+	char hwdev[256];
+	snd_pcm_t *pcm = NULL;
+	char NameString[256];
+
+	CloseSoundCard();
+
+	Debugprintf("Available Mix/Snoop Devices\n");
+
+	PlaybackCount = 0;
+	CaptureCount = 0;
+
+	err = snd_device_name_hint(-1, iface, &hints);
+
+	if (err < 0)
+		Debugprintf("snd_device_name_hint error: %s", snd_strerror(err));
+
+	n = (char **)hints;
+
+	while (*n != NULL)
+	{
+		if (memcmp(*n, "NAMEmix", 7) == 0)	//NAMEmix00|DESCQtSM Mix for hw0:0
+		{
+			char Hint[256];
+			char * ptr;
+			snd_pcm_stream_t stream = SND_PCM_STREAM_PLAYBACK;
+
+			strcpy(Hint, *n);
+
+			ptr = strchr(Hint, '|');
+
+			if (ptr)
+			{
+				*ptr++ = 0;
+			}	
+			
+			strcpy(hwdev, &Hint[4]);
+
+			err = snd_pcm_open(&pcm, hwdev, stream, SND_PCM_NONBLOCK);
+
+			if (err)
+			{
+				Debugprintf("Error %d opening output device %s ", err, hwdev);
+				goto nextdevice;
+			}
+
+			// Add device to list
+
+			if (ptr)
+				sprintf(NameString, "%s %s", hwdev, &ptr[4]);
+			else
+				strcpy(NameString, hwdev);
+
+			Debugprintf(NameString);
+
+			strcpy(PlaybackNames[PlaybackCount++], NameString);
+			snd_pcm_close(pcm);
+			pcm = NULL;
+		}
+		else if (memcmp(*n, "NAMEsnoop", 9) == 0)
+		{
+			char Hint[256];
+			char * ptr;
+			snd_pcm_stream_t stream = SND_PCM_STREAM_CAPTURE;
+
+			strcpy(Hint, *n);
+
+			ptr = strchr(Hint, '|');
+
+			if (ptr)
+			{
+				*ptr++ = 0;
+			}
+
+			strcpy(hwdev, &Hint[4]);
+
+			err = snd_pcm_open(&pcm, hwdev, stream, SND_PCM_NONBLOCK);
+
+			if (err)
+			{
+				Debugprintf("Error %d opening input device %s ", err, hwdev);
+				goto nextdevice;
+			}
+
+			// Add device to list
+
+			if (ptr)
+				sprintf(NameString, "%s %s", hwdev, &ptr[4]);
+			else
+				strcpy(NameString, hwdev);
+
+			Debugprintf(NameString);
+
+			strcpy(CaptureNames[CaptureCount++], NameString);
+			snd_pcm_close(pcm);
+			pcm = NULL;
+		}
+
+	nextdevice:
+		
+		n++;
+
+	}
+	snd_device_name_free_hint(hints);
+	return 0;
+}
+
+
 

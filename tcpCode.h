@@ -11,6 +11,7 @@ class mynet : public QObject
 signals:
 
 	void HLSetPTT(int c);
+	void FLRigSetPTT(int c);
 	void startTimer(int Time);
 	void stopTimer();
 
@@ -33,6 +34,10 @@ public slots:
 
 	void sendtoKISS(void * sock, unsigned char * Msg, int Len);
 
+	void FLRigdisplayError(QAbstractSocket::SocketError socketError);
+	void FLRigreadyRead();
+	void onFLRigSocketStateChanged(QAbstractSocket::SocketState socketState);
+	void ConnecttoFLRig();
 	void HAMLIBdisplayError(QAbstractSocket::SocketError socketError);
 	void HAMLIBreadyRead();
 	void onHAMLIBSocketStateChanged(QAbstractSocket::SocketState socketState);
@@ -40,6 +45,7 @@ public slots:
 	void dostartTimer(int Time);
 	void dostopTimer();
 	void doHLSetPTT(int c);
+	void doFLRigSetPTT(int c);
 
 	void readPendingDatagrams();
 	void socketError();
@@ -65,6 +71,11 @@ signals:
 	void sendtoKISS(void *, unsigned char *, int);
 	void openSockets();
 	void startCWIDTimer();
+	void setWaterfallImage();
+	void setLevelImage();
+	void setConstellationImage(int, int);
+	void startWatchdog();
+	void stopWatchdog();
 
 
 private:

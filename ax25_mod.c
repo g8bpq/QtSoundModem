@@ -866,7 +866,6 @@ int get_new_bit_tail(UCHAR snd_ch, UCHAR bit)
 		}
 		else
 		{
-			Debugprintf("End TXTAIL %d", SampleNo);
 			tx_status[snd_ch] = TX_WAIT_BPF;
 		}
 		
@@ -881,7 +880,6 @@ int get_new_bit_tail(UCHAR snd_ch, UCHAR bit)
 		}
 		else
 		{
-			Debugprintf("End TXTAIL %d", SampleNo);
 			tx_status[snd_ch] = TX_WAIT_BPF;
 		}
 		break;
@@ -1199,7 +1197,7 @@ float make_samples(unsigned char  snd_ch, unsigned char * bitptr)
 					tx_status[snd_ch] = TX_FRAME;
 	
 				if (tx_status[snd_ch] == TX_TAIL)
-					bit = get_new_bit_tail(snd_ch, bit);
+					bit = il2p_get_new_bit_tail(snd_ch, bit);
 
 				if (tx_status[snd_ch] == TX_FRAME)
 					bit = il2p_get_new_bit(snd_ch, bit);
@@ -1230,6 +1228,7 @@ float make_samples(unsigned char  snd_ch, unsigned char * bitptr)
 				*bitptr = tx_nrzi(snd_ch, bit);
 
 			}
+
 		}
 
 		// BPSK Mode
@@ -1240,13 +1239,10 @@ float make_samples(unsigned char  snd_ch, unsigned char * bitptr)
 			if (tx_status[snd_ch] == TX_SILENCE)
 			{
 				tx_delay_cnt[snd_ch] = 0;
-				Debugprintf("Start TXD");
 				tx_status[snd_ch] = TX_DELAY;
 			}
 
-
-
-			// il2p generates TXDELAY as part of the frame, so go straight too TX_FRAME
+			// il2p generates TXDELAY as part of the frame, so go straight to TX_FRAME
 
 			if (tx_status[snd_ch] == TX_DELAY)
 				if (il2p_mode[snd_ch] >= IL2P_MODE_TXRX)
@@ -1255,7 +1251,12 @@ float make_samples(unsigned char  snd_ch, unsigned char * bitptr)
 					bit = get_new_bit_delay(snd_ch, bit);
 
 			if (tx_status[snd_ch] == TX_TAIL)
-				bit = get_new_bit_tail(snd_ch, bit);
+			{
+				if (il2p_mode[snd_ch] >= IL2P_MODE_TXRX)
+					bit = il2p_get_new_bit_tail(snd_ch, bit);
+				else
+					bit = get_new_bit_tail(snd_ch, bit);
+			}
 
 			if (tx_status[snd_ch] == TX_FRAME)
 			{
@@ -1266,6 +1267,7 @@ float make_samples(unsigned char  snd_ch, unsigned char * bitptr)
 				else
 					bit = get_new_bit(snd_ch, bit);
 			}
+			
 			// ??			*bitptr = tx_nrzi(snd_ch, bit);
 
 			if (bit == 0)
@@ -1297,7 +1299,7 @@ float make_samples(unsigned char  snd_ch, unsigned char * bitptr)
 						tx_status[snd_ch] = TX_FRAME;			// il2p generates TXDELAY as part of the frame, so go straight to TX_FRAME
 
 					if (tx_status[snd_ch] == TX_TAIL)
-						bit = get_new_bit_tail(snd_ch, bit);
+						bit = il2p_get_new_bit_tail(snd_ch, bit);
 
 					if (tx_status[snd_ch] == TX_FRAME)
 						bit = il2p_get_new_bit(snd_ch, bit);
@@ -1372,7 +1374,6 @@ float make_samples(unsigned char  snd_ch, unsigned char * bitptr)
 				if (tx_status[snd_ch] == TX_SILENCE)
 				{
 					tx_delay_cnt[snd_ch] = 0;
-					Debugprintf("Start TXD");
 					tx_status[snd_ch] = TX_DELAY;
 				}
 
@@ -1382,7 +1383,7 @@ float make_samples(unsigned char  snd_ch, unsigned char * bitptr)
 						tx_status[snd_ch] = TX_FRAME;			// il2p generates TXDELAY as part of the frame, so go straight to TX_FRAME
 
 					if (tx_status[snd_ch] == TX_TAIL)
-						bit = get_new_bit_tail(snd_ch, bit);
+						bit = il2p_get_new_bit_tail(snd_ch, bit);
 
 					if (tx_status[snd_ch] == TX_FRAME)
 						bit = il2p_get_new_bit(snd_ch, bit);
@@ -1490,7 +1491,7 @@ float make_samples(unsigned char  snd_ch, unsigned char * bitptr)
 						tx_status[snd_ch] = TX_FRAME;			// il2p generates TXDELAY as part of the frame, so go straight to TX_FRAME
 
 					if (tx_status[snd_ch] == TX_TAIL)
-						bit = get_new_bit_tail(snd_ch, bit);
+						bit = il2p_get_new_bit_tail(snd_ch, bit);
 
 					if (tx_status[snd_ch] == TX_FRAME)
 						bit = il2p_get_new_bit(snd_ch, bit);
@@ -1590,7 +1591,6 @@ float make_samples(unsigned char  snd_ch, unsigned char * bitptr)
 				if (tx_status[snd_ch] == TX_SILENCE)
 				{
 					tx_delay_cnt[snd_ch] = 0;
-					Debugprintf("Start TXD");
 					tx_status[snd_ch] = TX_DELAY;
 				}
 

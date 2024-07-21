@@ -77,6 +77,9 @@ int main(int argc, char *argv[])
 	}
 
 	QObject::connect(&m1, SIGNAL(HLSetPTT(int)), &m1, SLOT(doHLSetPTT(int)), Qt::QueuedConnection);
+	QObject::connect(&m1, SIGNAL(FLRigSetPTT(int)), &m1, SLOT(doFLRigSetPTT(int)), Qt::QueuedConnection);
+
+
 	QObject::connect(&m1, SIGNAL(startTimer(int)), &m1, SLOT(dostartTimer(int)), Qt::QueuedConnection);
 	QObject::connect(&m1, SIGNAL(stopTimer()), &m1, SLOT(dostopTimer()), Qt::QueuedConnection);
 

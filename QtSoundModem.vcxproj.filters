@@ -98,9 +98,6 @@
     <ClCompile Include="ax25_mod.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="berlekamp.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="galois.c">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -140,14 +137,14 @@
     <ClCompile Include="dw9600.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="berlekamp.c">
+      <Filter>Generated Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <QtMoc Include="QtSoundModem.h">
       <Filter>Header Files</Filter>
     </QtMoc>
-    <ClInclude Include="UZ7HOStuff.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <QtMoc Include="tcpCode.h">
       <Filter>Header Files</Filter>
     </QtMoc>
@@ -186,5 +183,10 @@
     <Image Include="QtSoundModem.ico">
       <Filter>Resource Files</Filter>
     </Image>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="UZ7HOStuff.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

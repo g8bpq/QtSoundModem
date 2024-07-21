@@ -244,6 +244,10 @@ QTcpSocket * HAMLIBsock;
 int HAMLIBConnected = 0;
 int HAMLIBConnecting = 0;
 
+QTcpSocket * FLRIGsock;
+int FLRIGConnected = 0;
+int FLRIGConnecting = 0;
+
 void mynet::HAMLIBdisplayError(QAbstractSocket::SocketError socketError)
 {
 	switch (socketError)
@@ -331,6 +335,142 @@ extern "C" void HAMLIBSetPTT(int PTTState)
 
 	emit m1.HLSetPTT(PTTState);
 }
+
+extern "C" void FLRigSetPTT(int PTTState)
+{
+	// Won't work in non=gui mode
+
+	emit m1.FLRigSetPTT(PTTState);
+}
+
+
+QTcpSocket * FLRigsock;
+int FLRigConnected = 0;
+int FLRigConnecting = 0;
+
+void mynet::FLRigdisplayError(QAbstractSocket::SocketError socketError)
+{
+	switch (socketError)
+	{
+	case QAbstractSocket::RemoteHostClosedError:
+		break;
+
+	case QAbstractSocket::HostNotFoundError:
+		QMessageBox::information(nullptr, tr("QtSM"),
+			"FLRig host was not found. Please check the "
+			"host name and portsettings->");
+
+		break;
+
+	case QAbstractSocket::ConnectionRefusedError:
+
+		qDebug() << "FLRig Connection Refused";
+		break;
+
+	default:
+
+		qDebug() << "FLRig Connection Failed";
+		break;
+
+	}
+
+	FLRigConnecting = 0;
+	FLRigConnected = 0;
+}
+
+void mynet::FLRigreadyRead()
+{
+	unsigned char Buffer[4096];
+	QTcpSocket* Socket = static_cast<QTcpSocket*>(QObject::sender());
+
+	// read the data from the socket. Don't do anyhing with it at the moment
+
+	Socket->read((char *)Buffer, 4095);
+}
+
+void mynet::onFLRigSocketStateChanged(QAbstractSocket::SocketState socketState)
+{
+	if (socketState == QAbstractSocket::UnconnectedState)
+	{
+		// Close any connections
+
+		FLRigConnected = 0;
+		FLRigConnecting = 0;
+
+		//	delete (FLRigsock);
+		//	FLRigsock = 0;
+
+		qDebug() << "FLRig Connection Closed";
+
+	}
+	else if (socketState == QAbstractSocket::ConnectedState)
+	{
+		FLRigConnected = 1;
+		FLRigConnecting = 0;
+		qDebug() << "FLRig Connected";
+	}
+}
+
+
+void mynet::ConnecttoFLRig()
+{
+	delete(FLRigsock);
+
+	FLRigConnected = 0;
+	FLRigConnecting = 1;
+
+	FLRigsock = new QTcpSocket();
+
+	connect(FLRigsock, SIGNAL(error(QAbstractSocket::SocketError)), this, SLOT(FLRigdisplayError(QAbstractSocket::SocketError)));
+	connect(FLRigsock, SIGNAL(readyRead()), this, SLOT(FLRigreadyRead()));
+	connect(FLRigsock, SIGNAL(stateChanged(QAbstractSocket::SocketState)), this, SLOT(onFLRigSocketStateChanged(QAbstractSocket::SocketState)));
+
+	FLRigsock->connectToHost(FLRigHost, FLRigPort);
+
+	return;
+}
+
+static char MsgHddr[] = "POST /RPC2 HTTP/1.1\r\n"
+"User-Agent: XMLRPC++ 0.8\r\n"
+"Host: 127.0.0.1:7362\r\n"
+"Content-Type: text/xml\r\n"
+"Content-length: %d\r\n"
+"\r\n%s";
+
+static char Req[] = "<?xml version=\"1.0\"?>\r\n"
+"<methodCall><methodName>%s</methodName>\r\n"
+"%s"
+"</methodCall>\r\n";
+
+
+void mynet::doFLRigSetPTT(int c)
+{
+	int Len;
+	char ReqBuf[512];
+	char SendBuff[512];
+	char ValueString[256] = "";
+
+	sprintf(ValueString, "<params><param><value><i4>%d</i4></value></param></params\r\n>", c);
+
+	Len = sprintf(ReqBuf, Req, "rig.set_ptt", ValueString);
+	Len = sprintf(SendBuff, MsgHddr, Len, ReqBuf);
+
+	if (FLRigsock == nullptr || FLRigsock->state() != QAbstractSocket::ConnectedState)
+		ConnecttoFLRig();
+
+	if (FLRigsock == nullptr || FLRigsock->state() != QAbstractSocket::ConnectedState)
+		return;
+
+	FLRigsock->write(SendBuff);
+
+	FLRigsock->waitForBytesWritten(3000);
+
+	QByteArray datas = FLRigsock->readAll();
+
+	qDebug(datas.data());
+}
+
+
 
 extern "C" void startTimer(int Time)
 {

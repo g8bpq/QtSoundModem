@@ -95,6 +95,8 @@ int PlaybackCount = 0;
 char CaptureNames[16][256]= {""};
 char PlaybackNames[16][256]= {""};
 
+int txLatency;
+
 WAVEFORMATEX wfx = { WAVE_FORMAT_PCM, 2, 12000, 48000, 4, 16, 0 };
 
 HWAVEOUT hWaveOut = 0;
@@ -189,6 +191,9 @@ void printtick(char * msg)
 void txSleep(int mS)
 {
 	// called while waiting for next TX buffer. Run background processes
+
+	if (mS < 0)
+		return;
 
 	while (mS > 50)
 	{
@@ -356,6 +361,7 @@ void GetSoundDevices()
 
 
 HANDLE hStdin;
+int onlyMixSnoop = 0;
 
 int InitSound(BOOL Report)
 {
@@ -563,7 +569,7 @@ void PollReceivedSamples()
 			
 			lastlevelGUI = Now;
 
-			if ((Now - lastlevelreport) > 10000)	// 10 Secs
+			if ((Now - lastlevelreport) > 60000)	// 60 Secs
 			{
 				char HostCmd[64];
 				lastlevelreport = Now;
@@ -702,6 +708,8 @@ short * SoundInit()
 extern int Number;				// Number of samples waiting to be sent
 
 // Subroutine to add trailer before filtering
+
+extern int SampleNo;
 
 void SoundFlush()
 {

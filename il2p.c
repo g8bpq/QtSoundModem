@@ -46,6 +46,10 @@ along with QtSoundModem.  If not, see http://www.gnu.org/licenses
 
 #include <stdint.h>	// for uint64_t
 
+void debugHexDump(unsigned char * Data, int Len, char Dirn);
+extern void debugTimeStamp(char * Text, char Dirn);
+extern int useTimedPTT;
+
  // Oct 2023 Nino has added an optional crc
 
 // Hamming(7,4) Encoding Table
@@ -82,6 +86,10 @@ uint16_t Hamming74DecodeTable[128] = { \
 
 void Debugprintf(const char * format, ...);
 int SMUpdatePhaseConstellation(int chan, float * Phases, float * Mags, int intPSKPhase, int Count);
+
+extern int openTraceLog();
+extern uint64_t writeTraceLog(char * Data, char Dirn);
+extern void closeTraceLog();
 
 #define MAX_ADEVS 3			
 
@@ -1042,12 +1050,19 @@ void multi_modem_process_rec_packet(int snd_ch, int subchan, int slice, packet_t
 	string *  data = newString();
 	char Mode[32] = "IL2P";
 	int Quality = 0;
+	int CRCOK = 1;
+	char debugmsg[256];
 
 	sprintf(Mode, "IL2P %d", centreFreq);
+			
+	unsigned char * axcall = &pp->frame_data[7];
+	char call[10];
+
+	call[ConvFromAX25(axcall, call)] = 0;
 
 	// check crc if enabled
 
-	if (il2p_crc[snd_ch])
+	if (il2p_crc[snd_ch] & 1)
 	{
 		unsigned short CRCMSG;
 		unsigned short CRCCALC;
@@ -1065,16 +1080,32 @@ void multi_modem_process_rec_packet(int snd_ch, int subchan, int slice, packet_t
 		crc[2] = Hamming74DecodeTable[(pp->crc[2] & 0x7f)];
 		crc[3] = Hamming74DecodeTable[(pp->crc[3] & 0x7f)];
 
+		debugTimeStamp("CRC after Hamming decode is", 'R');
+		debugHexDump(crc, 4, 'R');
+
 		CRCMSG = crc[0] << 12 | crc[1] << 8 | crc[2] << 4 | crc[3];
 
 		CRCCALC = get_fcs(pp->frame_data, pp->frame_len);
 
 		if (CRCCALC != CRCMSG)
 		{
-			Debugprintf("CRC Error Decoder %d  Received %x Sent %x", subchan, CRCCALC, CRCMSG);
-			freeString(data);
-			ax25_delete(pp);
-			return;
+			CRCOK = 0;
+			if ((il2p_crc[snd_ch] & 2) == 0)			// Ignore CRC Error
+			{
+				Debugprintf("CRC Error from %s Decoder %d Calculated %x Received %x FEC corrections %d But ignore CRC Set", call, subchan, CRCCALC, CRCMSG, retries);
+				sprintf(debugmsg, "CRC Error from %s Decoder %d Calculated %x Received %x FEC corrections %d But ignore CRC Set", call, subchan, CRCCALC, CRCMSG, retries);
+				debugTimeStamp(debugmsg, 'R');
+
+			}
+
+
+			else
+			{
+				Debugprintf("CRC Error from %s Decoder %d Calculated %x Received %x FEC corrections %d", call, subchan, CRCCALC, CRCMSG, retries);
+				freeString(data);
+				ax25_delete(pp);
+				return;
+			}
 		}
 	}
 
@@ -1095,15 +1126,58 @@ void multi_modem_process_rec_packet(int snd_ch, int subchan, int slice, packet_t
 		pDET->errors = 0;
 	}
 
-	if (detect_list[snd_ch].Count > 0 &&
-		my_indexof(&detect_list[snd_ch], data) >= 0)
+	if (detect_list[snd_ch].Count > 0)
 	{
-		// Already have a copy of this frame
+		int index = my_indexof(&detect_list[snd_ch], data);
 
-		freeString(data);
-		Debugprintf("Discarding copy rcvr %d emph %d", subchan, 0);
-		return;
+		if (index >= 0)
+		{
+			// Already have a copy of this frame
+
+			// See if new one has fewer corrections
+
+			string * xx = Strings(&detect_list_c[snd_ch], index); // Should be corresponding frame info
+			string * olddata = Strings(&detect_list[snd_ch], index);
+
+			if (xx)
+			{
+				int oldRetries = xx->Data[255];
+				int oldCRCOK = xx->Data[254];
+
+				if ((oldCRCOK == 0 && CRCOK == 1) || (oldRetries > retries))
+				{
+					replaceString(&detect_list[snd_ch], index, data);
+					freeString(olddata);
+
+					// Just update the metadata
+
+					Debugprintf("Replacing il2p frame from %s rcvr %d emph %d FEC corrections %d CRCOK %d", call, subchan, slice, retries, CRCOK);
+
+					memset(xx->Data, 0, 16);
+
+					if (pskStates[snd_ch])
+					{
+						Quality = SMUpdatePhaseConstellation(snd_ch, &Phases[snd_ch][subchan][slice][0], &Mags[snd_ch][subchan][slice][0], pskStates[snd_ch], nPhases[snd_ch][subchan][slice]);
+						sprintf(Mode, "%s][Q%d", Mode, Quality);
+					}
+
+					xx->Length= sprintf(xx->Data, "%s", Mode);
+					xx->Data[254] = CRCOK;
+					xx->Data[255] = retries;
+
+					return;
+				}
+			}
+
+			freeString(data);
+			Debugprintf("Discarding copy rcvr %d emph %d FEC corrections %d", subchan, slice, retries);
+			return;
+		}
 	}
+
+	Debugprintf("Good il2p frame from %s rcvr %d emph %d FEC corrections %d", call, subchan, slice, retries);
+	sprintf(debugmsg, "Good il2p frame from %s rcvr %d emph %d FEC corrections %d", call, subchan, slice, retries);
+	debugTimeStamp(debugmsg, 'R');
 
 	string * xx = newString();
 	memset(xx->Data, 0, 16);
@@ -1121,7 +1195,11 @@ void multi_modem_process_rec_packet(int snd_ch, int subchan, int slice, packet_t
 //		sprintf(Mode, "IP2P-%d", retries);
 
 	stringAdd(xx, Mode, strlen(Mode));
+	xx->Data[254] = CRCOK;
+	xx->Data[255] = retries;
 
+	closeTraceLog();
+	openTraceLog();
 
 	return;
 
@@ -2234,6 +2312,8 @@ void il2p_init(int il2p_debug)
 		}
 	}
 
+	openTraceLog();
+
 } // end il2p_init
 
 
@@ -2838,6 +2918,9 @@ int il2p_encode_frame(packet_t pp, int max_fec, unsigned char *iout)
 	int e;
 	int out_len = 0;
 
+	debugTimeStamp("TX Raw Packet is", 'T');
+	debugHexDump(pp->frame_data, pp->frame_len, 'T');
+
 	e = il2p_type_1_header(pp, max_fec, hdr);
 	if (e >= 0) {
 		il2p_scramble_block(hdr, iout, IL2P_HEADER_SIZE);
@@ -2846,6 +2929,10 @@ int il2p_encode_frame(packet_t pp, int max_fec, unsigned char *iout)
 
 		if (e == 0) {
 			// Success. No info part.
+
+			debugTimeStamp("TX Type 1 IL2P Packet no info is", 'T');
+			debugHexDump(iout, out_len, 'R');
+
 			return (out_len);
 		}
 
@@ -2859,6 +2946,9 @@ int il2p_encode_frame(packet_t pp, int max_fec, unsigned char *iout)
 		if (k > 0) {
 			out_len += k;
 			// Success. Info part was <= 1023 bytes.
+			debugTimeStamp("TX Type 1 IL2P Packet is", 'T');
+			debugHexDump(iout, out_len, 'T');
+
 			return (out_len);
 		}
 
@@ -2885,6 +2975,10 @@ int il2p_encode_frame(packet_t pp, int max_fec, unsigned char *iout)
 			if (k > 0) {
 				out_len += k;
 				// Success. Entire AX.25 frame <= 1023 bytes.
+		
+				debugTimeStamp("TX Type 2 IL2P Packet is", 'T');
+				debugHexDump(iout, out_len, 'T');
+
 				return (out_len);
 			}
 			// Something went wrong with the payload encoding.
@@ -4017,6 +4111,9 @@ void il2p_rec_bit(int chan, int subchan, int slice, int dbit)
 			// Determine Centre Freq
 
 			centreFreq[chan] = GuessCentreFreq(chan);
+
+			debugTimeStamp("SYNC Detected", 'R');
+
 		}
 		else if (__builtin_popcount((~(F->acc) & 0x00ffffff) ^ IL2P_SYNC_WORD) <= 1) {
 			// FIXME - this pops up occasionally with random noise.  Find better way to convey information.
@@ -4062,7 +4159,7 @@ void il2p_rec_bit(int chan, int subchan, int slice, int dbit)
 
 					F->eplen = il2p_payload_compute(&plprop, len, max_fec);
 
-					if (il2p_get_debug() >= 1)
+					if (il2p_get_debug() >= 2)
 					{
 						Debugprintf("Header type %d, max fec = %d", hdr_type, max_fec);
 						Debugprintf("Need to collect %d encoded bytes for %d byte payload.", F->eplen, len);
@@ -4157,11 +4254,21 @@ void il2p_rec_bit(int chan, int subchan, int slice, int dbit)
 			{
 				// have all crc bytes. enter DECODE
 
+				debugTimeStamp("CRC Complete Header is", 'R');
+				debugHexDump(F->shdr, 15, 'R');
+				if (F->pc)
+				{
+					debugTimeStamp("Payload is", 'R');
+					debugHexDump(F->spayload, F->pc, 'R');
+				}
+				debugTimeStamp("CRC is", 'R');
+				debugHexDump(F->crc, 4, 'R');
+
 				F->state = IL2P_DECODE;
 			}
 		}
 
-			break;
+		break;
 
 	case IL2P_DECODE:
 
@@ -4182,10 +4289,12 @@ void il2p_rec_bit(int chan, int subchan, int slice, int dbit)
 			{
 				// Most likely too many FEC errors.
 				Debugprintf("FAILED to construct frame in %s.\n", __func__);
+				debugTimeStamp("Packet Decode failed", 'R');
 			}
 		}
 
-		if (pp != NULL) {
+		if (pp != NULL)
+		{
 			alevel_t alevel = demod_get_audio_level(chan, subchan);
 			retry_t retries = F->corrected;
 			int is_fx25 = 1;		// FIXME: distinguish fx.25 and IL2P.
@@ -4194,6 +4303,9 @@ void il2p_rec_bit(int chan, int subchan, int slice, int dbit)
 			// TODO: Could we put last 3 arguments in packet object rather than passing around separately?
 
 			// if using crc pass received crc to packet object
+
+			debugTimeStamp("Decoded Packet is", 'R');
+			debugHexDump(pp->frame_data, pp->frame_len, 'R');
 
 			if (il2p_crc[chan])
 			{
@@ -4205,14 +4317,15 @@ void il2p_rec_bit(int chan, int subchan, int slice, int dbit)
 				pp->crc[3] = F->crc[3];
 			}
 
+			debugTimeStamp("CRC raw bytes", 'R');
+			debugHexDump(pp->crc, 4, 'R');
+
 			multi_modem_process_rec_packet(chan, subchan, slice, pp, alevel, retries, is_fx25, slice, centreFreq[chan]);
 		}
 	}   // end block for local variables.
 
-	if (il2p_get_debug() >= 1) {
-
+	if (il2p_get_debug() >= 2)
 		Debugprintf("-----");
-	}
 
 	F->state = IL2P_SEARCHING;
 	break;
@@ -4426,7 +4539,7 @@ string * il2p_send_frame(int chan, packet_t pp, int max_fec, int polarity)
 	// if we are using crc add it now. elen should point to end of data
 	// crc should be at pp->frame_data[pp->frame_len]
 
-	if (il2p_crc[chan])
+	if (il2p_crc[chan] & 1)
 	{
 		// The four encoded CRC bytes are arranged :
 		// | CRC3 | CRC2 | CRC1 | CRC0 |
@@ -4440,10 +4553,9 @@ string * il2p_send_frame(int chan, packet_t pp, int max_fec, int polarity)
 		encoded[elen++] = Hamming74EncodeTable[crc1 &0xf];
 	}
 
-
 	number_of_bits_sent[chan] = 0;
 
-	if (il2p_get_debug() >= 1) {
+	if (il2p_get_debug() >= 2) {
 		Debugprintf("IL2P frame, max_fec = %d, %d encoded bytes total", max_fec, elen);
 //		fx_hex_dump(encoded, elen);
 	}
@@ -4475,12 +4587,14 @@ string * il2p_send_frame(int chan, packet_t pp, int max_fec, int polarity)
 
 	stringAdd(packet, encoded, elen);
 
+	// Add bytes for tail and TX padding, but don't send if another packet is available (?? how ??)
+
+	number_of_bits_sent[chan] = 0;
+
 	tx_fx25_size[chan] = packet->Length * 8;
 
 	return packet;
 }
-
-
 
 // TX Code. Builds whole packet then sends a bit at a time
 
@@ -4521,6 +4635,11 @@ string * fill_il2p_data(int snd_ch, string * data)
 	memcpy(pp->frame_data, data->Data, data->Length);	// Copy the crc in case we are going to send it
 
 	result = il2p_send_frame(snd_ch, pp, 1, 0);
+
+	ax25_delete(pp);
+
+	debugTimeStamp("TX Complete packet including Preamble and CRC and Tail", 'T');
+	debugHexDump(result->Data, result->Length, 'T');
 
 	return result;
 }
@@ -4657,6 +4776,10 @@ int il2p_get_new_bit(int snd_ch, Byte bit)
 			break;
 
 		case FRAME_NO_FRAME:
+
+			// I dont really like this state machine. We have run out of frames to send so 
+			// should go straight to tail. This way we add an extra bit. Or does this really matter ??
+
 			tx_tail_cnt[snd_ch] = 0;
 			tx_frame_status[snd_ch] = FRAME_EMPTY;
 			tx_status[snd_ch] = TX_TAIL;
@@ -4666,5 +4789,251 @@ int il2p_get_new_bit(int snd_ch, Byte bit)
 	return bit;
 }
 
+extern int txLatency;
+extern int useTImedPTT;
+
+int il2p_get_new_bit_tail(UCHAR snd_ch, UCHAR bit)
+{
+	// This sends reversals. It is an experiment
+
+	int tailbits = (txtail[snd_ch] * tx_baudrate[snd_ch]) / 1000;	
+
+#ifndef WIN32
+	if (useTimedPTT)
+		tailbits += (txLatency * tx_baudrate[snd_ch]) / 1000;				// add padding to tx buffer to make sure we don't send silence
+#endif
+	if (tx_tail_cnt[snd_ch]++ > tailbits)
+		tx_status[snd_ch] = TX_WAIT_BPF;
+
+	return (tx_tail_cnt[snd_ch] & 1);	// altenating 1/0
+
+}
 
 
+void debugHexDump(unsigned char * Data, int Len, char Dirn)
+{
+	char Line[256];
+
+#ifndef LOGTX
+
+	if (Dirn == 'T')
+		return;
+
+#endif
+
+#ifndef LOGRX
+
+	if (Dirn == 'R')
+		return;
+
+#endif
+
+	while (Len > 0)
+	{
+		sprintf(Line, "%02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
+			Data[0], Data[1], Data[2], Data[3], Data[4], Data[5], Data[6], Data[7],
+			Data[8], Data[9], Data[10], Data[11], Data[12], Data[13], Data[14], Data[15]);
+
+		if (Len < 16)
+		{
+			Line[Len * 3] = 10;
+			Line[Len * 3 + 1] = 0;
+		}
+		writeTraceLog(Line, Dirn);
+
+		Data += 16;
+		Len -= 16;
+	}
+}
+
+
+// Hamming experiments
+
+// from https://github.com/nasserkessas/hamming-codes/blob/master/hamming.c
+
+#define block unsigned short    // 16 bits
+#define bit uint8_t                // 8 bits (only last is used)
+
+int multipleXor(int *indicies, int len)
+{
+	int val = indicies[0];
+	for (int i = 1; i < len; i++)
+	{
+		val = val ^ indicies[i];
+	}
+	return val;
+}
+
+bit getBit(unsigned short  b, int i)
+{
+	return (b << i) & (int)pow(2, (sizeof(unsigned short) * 8 - 1));
+}
+
+
+unsigned short  toggleBit(unsigned short  b, int i)
+{
+	return b ^ (1 << i);
+}
+
+
+bit getCharBit(char b, int i) 
+{
+	return (b << i) & (int)pow(2, (sizeof(char) * 8 - 1));
+}
+
+block modifyBit(block n, int p, bit b) 
+{
+	return ((n & ~(1 << (sizeof(block) * 8 - 1 - p))) | (b << (sizeof(block) * 8 - 1 - p)));
+}
+
+void encode(char *input, int len, FILE *ptr) {
+
+	// Amount of bits in a block //
+	int bits = sizeof(block) * 8;
+
+	// Amount of bits per block used to carry the message //
+	int messageBits = bits - log2(bits) - 1;
+
+	// Amount of blocks needed to encode message //
+	int blocks = ceil((float)len / messageBits);
+
+	// Array of encoded blocks //
+	block encoded[16];
+
+	// Loop through each block //
+	for (int i = 0; i < blocks + 1; i++) {
+
+		printf("On Block %d:\n", i);
+
+		// Final encoded block variable //
+		block thisBlock = 0;
+
+		// Amount of "skipped" bits (used for parity) //
+		int skipped = 0;
+
+		// Count of how many bits are "on" //
+		int onCount = 0;
+
+		// Array of "on" bits //
+		int onList[64];
+
+		// Loop through each message bit in this block to populate final block //
+		for (int j = 0; j < bits; j++) {
+
+			// Skip bit if reserved for parity bit //
+			if ((j & (j - 1)) == 0) { // Check if j is a power of two or 0
+				skipped++;
+				continue;
+			}
+
+			bit thisBit;
+
+			if (i != blocks) {
+
+				// Current overall bit number //
+				int currentBit = i * messageBits + (j - skipped);
+
+				// Current character //
+				int currentChar = currentBit / (sizeof(char) * 8); // int division
+
+				// Value of current bit //
+				thisBit = currentBit < len * sizeof(char) * 8 ? getCharBit(input[currentChar], currentBit - currentChar * 8) : 0;
+			}
+
+			else {
+				thisBit = getBit(len / 8, j - skipped + (sizeof(block) * 8 - messageBits));
+			}
+
+			// If bit is "on", add to onList and onCount //
+			if (thisBit) {
+				onList[onCount] = j;
+				onCount++;
+			}
+
+			// Populate final message block //
+			thisBlock = modifyBit(thisBlock, j, thisBit);
+		}
+
+		// Calculate values of parity bits //
+		block parityBits = multipleXor(onList, onCount);
+
+		// Loop through skipped bits (parity bits) //
+		for (int k = 1; k < skipped; k++) { // skip bit 0
+
+			// If bit is "on", add to onCount
+			if (getBit(parityBits, sizeof(block) * 8 - skipped + k)) {
+				onCount++;
+			}
+
+			// Add parity bit to final block //
+			thisBlock = modifyBit(thisBlock, (int)pow(2, skipped - k - 1), getBit(parityBits, sizeof(block) * 8 - skipped + k));
+		}
+
+		// Add overall parity bit (total parity of onCount) //
+		thisBlock = modifyBit(thisBlock, 0, onCount & 1);
+
+		// Output final block //
+//		printBlock(thisBlock);
+//		putchar('\n');
+
+		// Add block to encoded blocks //
+		encoded[i] = thisBlock;
+	}
+
+	// Write encoded message to file //
+	fwrite(encoded, sizeof(block), blocks + 1, ptr);
+}
+
+
+void decode(block input[], int len, FILE *ptr)
+{
+
+	// Amount of bits in a block //
+	int bits = sizeof(block) * 8;
+
+	for (int b = 0; b < (len / sizeof(block)); b++) {
+
+		printf("On Block %d:\n", b);
+
+		// Print initial block //
+//		printBlock(input[b]);
+
+		// Count of how many bits are "on" //
+		int onCount = 0;
+
+		// Array of "on" bits //
+		int onList[64];
+
+		// Populate onCount and onList //
+		for (int i = 1; i < bits; i++) {
+			getBit(input[b], i);
+			if (getBit(input[b], i)) {
+				onList[onCount] = i;
+				onCount++;
+			}
+		}
+
+		// Check for single errors //
+		int errorLoc = multipleXor(onList, onCount);
+
+		if (errorLoc) {
+
+			// Check for multiple errors //
+			if (!(onCount & 1 ^ getBit(input[b], 0))) { // last bit of onCount (total parity) XOR first bit of block (parity bit)
+				printf("\nMore than one error detected. Aborting.\n");
+				exit(1);
+			}
+
+			// Flip error bit //
+			else {
+				printf("\nDetected error at position %d, flipping bit.\n", errorLoc);
+				input[b] = toggleBit(input[b], (bits - 1) - errorLoc);
+
+				// Re-print block for comparison //
+//				printBlock(input[b]);
+			}
+		}
+
+		putchar('\n');
+	}
+}
