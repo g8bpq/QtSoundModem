@@ -541,12 +541,12 @@ void SMUpdateBusyDetector(int LR, float * Real, float *Imag)
 
 		if (blnBusyStatus && !blnLastBusyStatus[chan])
 		{
-			Debugprintf("Ch %d Busy True", chan);
+//			Debugprintf("Ch %d Busy True", chan);
 			updateDCD(chan, TRUE);
 		}
 		else if (blnLastBusyStatus[chan] && !blnBusyStatus)
 		{
-			Debugprintf("Ch %d Busy False", chan);
+//			Debugprintf("Ch %d Busy False", chan);
 			updateDCD(chan, FALSE);
 		}
 		blnLastBusyStatus[chan] = blnBusyStatus;

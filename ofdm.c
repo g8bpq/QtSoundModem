@@ -200,6 +200,7 @@ extern int LastDataFrameType;			// Last data frame processed (for Memory ARQ, et
 extern int intNAKctr;
 extern int intACKctr;
 extern int intTimeouts;
+void ARDOPSampleSink(short Sample);
 
 extern UCHAR goodReceivedBlocks[128];
 extern UCHAR goodReceivedBlockLen[128];
