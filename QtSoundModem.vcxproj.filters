@@ -140,6 +140,9 @@
     <ClCompile Include="berlekamp.c">
       <Filter>Generated Files</Filter>
     </ClCompile>
+    <ClCompile Include="6pack.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <QtMoc Include="QtSoundModem.h">

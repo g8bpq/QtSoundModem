@@ -177,7 +177,7 @@ void AGW_del_socket(void * socket)
 	if (AGW == NULL)
 		return;
 
-	Clear(&AGW->AGW_frame_buf);
+//	Clear(&AGW->AGW_frame_buf);
 	freeString(AGW->data_in);
 	AGW->Monitor = 0;
 	AGW->Monitor_raw = 0;
@@ -190,9 +190,7 @@ void AGW_add_socket(void * socket)
 {
 	AGWUser * User = (struct AGWUser_t *)malloc(sizeof(struct AGWUser_t));			// One Client
 	
-
 	AGWUsers = realloc(AGWUsers, (AGWConCount + 1) * sizeof(void *));
-	
 	AGWUsers[AGWConCount++] = User;
 
 	User->data_in = newString();
@@ -259,7 +257,7 @@ string * AGW_R_Frame()
 
 string * AGW_X_Frame(char * CallFrom,  UCHAR reg_call)
 {
-	string * Msg = AGW_frame_header(0, 'x', 0, CallFrom, "", 1);
+	string * Msg = AGW_frame_header(0, 'X', 0, CallFrom, "", 1);
 
 	stringAdd(Msg, (UCHAR *)&reg_call, 1);
 
@@ -276,13 +274,16 @@ string * AGW_G_Frame()
 	
 	for (int i = 0; i < 4; i++)
 	{
-		Ports[0]++;
 		if (soundChannel[i])
+		{
+			Ports[0]++;
 			sprintf(portMsg, "Port%c with SoundCard Ch %c;", Ports[0], 'A' + i);
-		else
-			sprintf(portMsg, "Port%c Disabled;", Ports[0]);
+			strcat(Ports, portMsg);
+		}
+//		else
+//			sprintf(portMsg, "Port%c Disabled;", Ports[0]);
 
-		strcat(Ports, portMsg);
+;
 	}
 
 
@@ -292,7 +293,6 @@ string * AGW_G_Frame()
 
 	return Msg;
 };
-
 
 
 string * AGW_Gs_Frame(int port, Byte * port_info, int Len)
@@ -511,12 +511,50 @@ void on_AGW_R_frame(AGWUser * AGW)
 int refreshModems = 0;
 
 
+/*
+
++ 00 On air baud rate(0 = 1200 / 1 = 2400 / 2 = 4800 / 3 = 9600…)
++ 01 Traffic level(if 0xFF the port is not in autoupdate mode)
++ 02 TX Delay
++ 03 TX Tail
++ 04 Persist
++ 05 SlotTime
++ 06 MaxFrame
++ 07 How Many connections are active on this port
++ 08 LSB Low Word
++ 09 MSB Low Word
++ 10 LSB High Word
++ 11 MSB High Word HowManyBytes(received in the last 2 minutes) as a 32 bits(4 bytes) integer.Updated every two minutes.
+*/
+
 void on_AGW_Gs_frame(AGWUser * AGW, struct AGWHeader * Frame, Byte * Data)
 {
 	// QTSM with a data field is used by QtSM to set/read Modem Params
 
 	Byte info[48] = { 0, 255, 24, 3, 100, 15, 6, 0, 1, 0, 0, 0 }; //QTSM Signature
 	int Len = 12;
+	int Port = Frame->Port;
+
+	// KD6YAM wants the info to be correct. BPQ used 24, 3, 100 as a signature but could use the Version.
+	// For now I'll fill in the rest
+
+	info[2] = txdelay[Port] / 10;
+	info[3] = txtail[Port] / 10;
+	info[4] = persist[Port];
+	info[5] = slottime[Port];
+	info[6] = maxframe[Port];
+	info[7] = 0;
+
+	int i = 0;
+	while (i < port_num)
+	{
+		if (AX25Port[Port][i].status != STAT_NO_LINK)
+			info[7]++;
+
+		i++;
+	}
+
+	memcpy(&info[8], &bytes2mins[Port], 4);
 
 	if (Frame->DataLength == 32)
 	{
@@ -1360,7 +1398,6 @@ void AGW_Report_Modem_Change(int port)
 
 	int i;
 	AGWUser * AGW;
-	string * pkt;
 
 	if (soundChannel[port] == 0)		// Not in use
 		return;
@@ -1537,3 +1574,16 @@ void AGW_frame_analiz(AGWUser *  AGW)
 		Debugprintf("AGW %c", Frame->DataKind);
 	}
 }
+
+void doAGW2MinTimer()
+{
+	for (int n = 0; n < 4; n++)
+	{
+		if (soundChannel[n] == 0)	// Channel not used
+			continue;
+
+		bytes2mins[n] = bytes[n];
+		bytes[n] = 0;
+	}
+}
+

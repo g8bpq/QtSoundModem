@@ -29,6 +29,42 @@ along with QtSoundModem.  If not, see http://www.gnu.org/licenses
 #include <errno.h>
 #include <stdint.h>   
 
+
+void platformInit();
+void RsCreate();
+void detector_init();
+void KISS_init();
+void ax25_init();
+void init_raduga();
+void il2p_init(int il2p_debug);
+void SoundFlush();
+void BufferFull(short * Samples, int nSamples);
+void PollReceivedSamples();
+void chk_dcd1(int snd_ch, int buf_size);
+void make_core_BPF(UCHAR snd_ch, short freq, short width);
+void modulator(UCHAR snd_ch, int buf_size);
+void sendAckModeAcks(int snd_ch);
+void PktARDOPEncode(UCHAR * Data, int Len, int Chan);
+void RUHEncode(unsigned char * Data, int Len, int chan);
+void sendRSID(int Chan, int dropTX);
+void SetupGPIOPTT();
+int stricmp(const unsigned char * pStr1, const unsigned char *pStr2);
+int gpioInitialise(void);
+int OpenCOMPort(char * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet, int Stopbits);
+void HAMLIBSetPTT(int PTTState);
+void FLRigSetPTT(int PTTState);
+void StartWatchdog();
+void StopWatchdog();
+void gpioWrite(unsigned gpio, unsigned level);
+BOOL WriteCOMBlock(int fd, char * Block, int BytesToWrite);
+void COMSetDTR(int fd);
+void COMSetRTS(int fd);
+void analiz_frame(int snd_ch, string * frame, char * code, boolean fecflag);
+size_t write(int fd, void * buf, size_t count);
+int close(int fd);
+void SendMgmtPTT(int snd_ch, int PTTState);
+
+
 BOOL KISSServ;
 int KISSPort;
 
@@ -367,13 +403,13 @@ extern int intLastStop;
 void SMSortSignals2(float * dblMag, int intStartBin, int intStopBin, int intNumBins, float *  dblAVGSignalPerBin, float *  dblAVGBaselinePerBin);
 
 
-BOOL SMBusyDetect3(float * dblMag, int intStart, int intStop)        // this only called while searching for leader ...once leader detected, no longer called.
+BOOL SMBusyDetect3(int Chan, float * dblMag, int intStart, int intStop)        // this only called while searching for leader ...once leader detected, no longer called.
 {
 	// First sort signals and look at highes signals:baseline ratio..
 
 	float dblAVGSignalPerBinNarrow, dblAVGSignalPerBinWide, dblAVGBaselineNarrow, dblAVGBaselineWide;
 	float dblSlowAlpha = 0.2f;
-	float dblAvgStoNNarrow = 0, dblAvgStoNWide = 0;
+	static float dblAvgStoNNarrow[4] = { 0 }, dblAvgStoNWide[4] = {0};
 	int intNarrow = 8;  // 8 x 11.72 Hz about 94 z
 	int intWide = ((intStop - intStart) * 2) / 3; //* 0.66);
 	int blnBusy = FALSE;
@@ -384,15 +420,16 @@ BOOL SMBusyDetect3(float * dblMag, int intStart, int intStop)        // this onl
 
 	SMSortSignals2(dblMag, intStart, intStop, intNarrow, &dblAVGSignalPerBinNarrow, &dblAVGBaselineNarrow);
 
+	// Shouldn't dblAvgStoNNarrow, dblAvgStoNWide be static ??????
+
+
 	if (intLastStart == intStart && intLastStop == intStop)
-		dblAvgStoNNarrow = (1 - dblSlowAlpha) * dblAvgStoNNarrow + dblSlowAlpha * dblAVGSignalPerBinNarrow / dblAVGBaselineNarrow;
+		dblAvgStoNNarrow[Chan] = (1 - dblSlowAlpha) * dblAvgStoNNarrow[Chan] + dblSlowAlpha * dblAVGSignalPerBinNarrow / dblAVGBaselineNarrow;
 	else
 	{
 		// This initializes the Narrow average after a bandwidth change
 
-		dblAvgStoNNarrow = dblAVGSignalPerBinNarrow / dblAVGBaselineNarrow;
-		intLastStart = intStart;
-		intLastStop = intStop;
+		dblAvgStoNNarrow[Chan] = dblAVGSignalPerBinNarrow / dblAVGBaselineNarrow;
 	}
 
 	// Wide band (66% of current bandwidth)
@@ -400,12 +437,12 @@ BOOL SMBusyDetect3(float * dblMag, int intStart, int intStop)        // this onl
 	SMSortSignals2(dblMag, intStart, intStop, intWide, &dblAVGSignalPerBinWide, &dblAVGBaselineWide);
 
 	if (intLastStart == intStart && intLastStop == intStop)
-		dblAvgStoNWide = (1 - dblSlowAlpha) * dblAvgStoNWide + dblSlowAlpha * dblAVGSignalPerBinWide / dblAVGBaselineWide;
+		dblAvgStoNWide[Chan] = (1 - dblSlowAlpha) * dblAvgStoNWide[Chan] + dblSlowAlpha * dblAVGSignalPerBinWide / dblAVGBaselineWide;
 	else
 	{
 		// This initializes the Wide average after a bandwidth change
 
-		dblAvgStoNWide = dblAVGSignalPerBinWide / dblAVGBaselineWide;
+		dblAvgStoNWide[Chan] = dblAVGSignalPerBinWide / dblAVGBaselineWide;
 		intLastStart = intStart;
 		intLastStop = intStop;
 	}
@@ -413,7 +450,7 @@ BOOL SMBusyDetect3(float * dblMag, int intStart, int intStop)        // this onl
 	// Preliminary calibration...future a function of bandwidth and BusyDet.
 
 
-	blnBusy = (dblAvgStoNNarrow > (3 + 0.008 * BusyDet4th)) || (dblAvgStoNWide > (5 + 0.02 * BusyDet4th));
+	blnBusy = (dblAvgStoNNarrow[Chan] > (3 + 0.008 * BusyDet4th)) || (dblAvgStoNWide[Chan] > (5 + 0.02 * BusyDet4th));
 
 //	if (BusyDet == 0)
 //		blnBusy = FALSE;		// 0 Disables check ?? Is this the best place to do this?
@@ -452,7 +489,7 @@ void SMSortSignals2(float * dblMag, int intStartBin, int intStopBin, int intNumB
 	*dblAVGBaselinePerBin = dblSum2 / (intStopBin - intStartBin - intNumBins - 1);
 }
 
-
+extern void updateDCD(int Chan, BOOL State);
 
 void SMUpdateBusyDetector(int LR, float * Real, float *Imag)
 {
@@ -465,10 +502,8 @@ void SMUpdateBusyDetector(int LR, float * Real, float *Imag)
 	static BOOL blnLastBusyStatus[4];
 
 	float dblMagAvg = 0;
-	int intTuneLineLow, intTuneLineHi, intDelta;
 	int i, chan;
 
-	return;
 
 	if (Now - LastBusyCheck < 100)	// ??
 		return;
@@ -487,6 +522,9 @@ void SMUpdateBusyDetector(int LR, float * Real, float *Imag)
 		Low = tx_freq[chan] - txbpf[chan] / 2;
 		High = tx_freq[chan] + txbpf[chan] / 2;
 
+//		Low = tx_freq[chan] - 0.5*rx_shift[chan];
+//		High = tx_freq[chan] + 0.5*rx_shift[chan];
+
 		// BinSize is width of each fft bin in Hz
 
 		Start = (Low / BinSize);		// First and last bins to process
@@ -499,20 +537,18 @@ void SMUpdateBusyDetector(int LR, float * Real, float *Imag)
 			dblMagAvg += dblMag[i];
 		}
 
-		blnBusyStatus = SMBusyDetect3(dblMag, Start, End);
+		blnBusyStatus = SMBusyDetect3(chan, dblMag, Start, End);
 
 		if (blnBusyStatus && !blnLastBusyStatus[chan])
 		{
 			Debugprintf("Ch %d Busy True", chan);
+			updateDCD(chan, TRUE);
 		}
 		else if (blnLastBusyStatus[chan] && !blnBusyStatus)
 		{
 			Debugprintf("Ch %d Busy False", chan);
+			updateDCD(chan, FALSE);
 		}
-		//    stcStatus.Text = "FALSE"
-		//    queTNCStatus.Enqueue(stcStatus)
-		//    'Debug.WriteLine("BUSY FALSE @ " & Format(DateTime.UtcNow, "HH:mm:ss"))
-
 		blnLastBusyStatus[chan] = blnBusyStatus;
 	}
 }
@@ -1222,6 +1258,7 @@ void CM108_set_ptt(int PTTState)
 float amplitudes[4] = { 32000, 32000, 32000, 32000 };
 extern float amplitude;
 void startpttOnTimer();
+extern void UpdatePTTStats(int Chan, int State);
 
 void RadioPTT(int snd_ch, BOOL PTTState)
 {
@@ -1239,6 +1276,15 @@ void RadioPTT(int snd_ch, BOOL PTTState)
 		amplitudes[snd_ch] = amplitude;
 		StopWatchdog();
 	}
+
+	if ((PTTMode & PTTHOST))
+	{
+		// Send PTT ON/OFF to any mgmt connections
+
+		SendMgmtPTT(snd_ch, PTTState);
+	}
+
+	UpdatePTTStats(snd_ch, PTTState);
 
 #ifdef __ARM_ARCH
 	if (useGPIO)
@@ -1306,6 +1352,8 @@ void RadioPTT(int snd_ch, BOOL PTTState)
 				COMClearRTS(hPTTDevice);
 		}
 	}
+
+				
 	startpttOnTimer();
 
 }

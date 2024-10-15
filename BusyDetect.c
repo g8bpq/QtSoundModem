@@ -45,156 +45,28 @@ VOID ClearBusy()
 	intLastStop = 0;		// This will force the busy detector to ignore old averages and initialze the rolling average filters
 }
 
-/*
-// Function to implement a busy detector based on 1024 point FFT
+extern int FFTSize;
 
-BOOL BusyDetect2(float * dblMag, int intStart, int intStop)        // this only called while searching for leader ...once leader detected, no longer called.
+BOOL BusyDetect3(float * dblMag, int StartFreq, int EndFreq)
 {
-	// each bin is about 12000/1024 or 11.72 Hz
-	// this only called while searching for leader ...once leader detected, no longer called.
+
+	// Based on code from ARDOP, but using diffferent FFT size
+	// QtSM is using an FFT size based on waterfall settings.
+
 	// First sort signals and look at highes signals:baseline ratio..
-
-	float dblAVGSignalPerBinNarrow, dblAVGSignalPerBinWide, dblAVGBaselineNarrow, dblAVGBaselineWide;
-	float dblFastAlpha = 0.4f;
-	float dblSlowAlpha = 0.2f;
-	float dblAvgStoNNarrow, dblAvgStoNWide;
-	int intNarrow = 8;  // 8 x 11.72 Hz about 94 z
-	int intWide = ((intStop - intStart) * 2) / 3; //* 0.66);
-	int blnBusy = FALSE;
-	float dblAvgStoNSlowNarrow = 0;
-	float dblAvgStoNFastNarrow = 0;
-	float dblAvgStoNSlowWide = 0;
-	float dblAvgStoNFastWide = 0;
-
-	// First narrow band (~94Hz)
-
-	SortSignals(dblMag, intStart, intStop, intNarrow, &dblAVGSignalPerBinNarrow, &dblAVGBaselineNarrow);
-
-	if (intLastStart == intStart && intLastStop == intStop)
-	{
-		dblAvgStoNSlowNarrow = (1 - dblSlowAlpha) * dblAvgStoNSlowNarrow + dblSlowAlpha * dblAVGSignalPerBinNarrow / dblAVGBaselineNarrow;
-		dblAvgStoNFastNarrow = (1 - dblFastAlpha) * dblAvgStoNFastNarrow + dblFastAlpha * dblAVGSignalPerBinNarrow / dblAVGBaselineNarrow;
-	}
-	else
-	{
-		dblAvgStoNSlowNarrow = dblAVGSignalPerBinNarrow / dblAVGBaselineNarrow;
-		dblAvgStoNFastNarrow = dblAVGSignalPerBinNarrow / dblAVGBaselineNarrow;
-		intLastStart = intStart;
-		intLastStop = intStop;
-	}
 	
-	dblAvgStoNNarrow = max(dblAvgStoNSlowNarrow, dblAvgStoNFastNarrow); // computes fast attack, slow release
-
-	// Wide band (66% ofr current bandwidth) 
-
-	SortSignals(dblMag, intStart, intStop, intWide, &dblAVGSignalPerBinWide, &dblAVGBaselineWide);
-
-	if (intLastStart == intStart && intLastStop == intStop)
-	{
-		dblAvgStoNSlowWide = (1 - dblSlowAlpha) * dblAvgStoNSlowWide + dblSlowAlpha * dblAVGSignalPerBinWide / dblAVGBaselineWide;
-		dblAvgStoNFastWide = (1 - dblFastAlpha) * dblAvgStoNFastWide + dblFastAlpha * dblAVGSignalPerBinWide / dblAVGBaselineWide;
-	}
-	else
-	{
-		dblAvgStoNSlowWide = dblAVGSignalPerBinWide / dblAVGBaselineWide;
-		dblAvgStoNFastWide = dblAVGSignalPerBinWide / dblAVGBaselineWide;
-		intLastStart = intStart;
-		intLastStop = intStop;
-	}
-
-	dblAvgStoNNarrow = max(dblAvgStoNSlowNarrow, dblAvgStoNFastNarrow); // computes fast attack, slow release
-	dblAvgStoNWide = max(dblAvgStoNSlowWide, dblAvgStoNFastWide); // computes fast attack, slow release
-
-	// Preliminary calibration...future a function of bandwidth and BusyDet.
-   
-	switch (ARQBandwidth)
-	{
-	case B200MAX:
-	case B200FORCED:
-		if (dblAvgStoNNarrow > 1.5 * BusyDet|| dblAvgStoNWide > 2.5 * BusyDet)
-			blnBusy = True;
-		break;
-
-	case B500MAX:
-	case B500FORCED:
-		if (dblAvgStoNNarrow > 1.5 * BusyDet || dblAvgStoNWide > 2.5 * BusyDet)
-			blnBusy = True;
-		break;
-
-	case B1000MAX:
-	case B1000FORCED:
-
-		if (dblAvgStoNNarrow > 1.4 * BusyDet || dblAvgStoNWide > 2 * BusyDet)
-			blnBusy = True;
-		break;
-
-	case B2000MAX:
-	case B2000FORCED:
-		if (dblAvgStoNNarrow > 1.4 * BusyDet || dblAvgStoNWide > 2 * BusyDet)
-			blnBusy = True;
-	}
-
-	if (blnBusy) // This used to skip over one call busy nuisance trips. Busy must be present at least 2 consecutive times to be reported
-	{
-		intBusyOnCnt += 1;
-		intBusyOffCnt = 0;
-        if (intBusyOnCnt > 1)
-			blnBusy = True;
-		else if (!blnBusy)
-		{
-			intBusyOffCnt += 1;
-			intBusyOnCnt = 0;
-			if (intBusyOffCnt > 3)
-				blnBusy = False;
-		}
-	}
-	if (blnLastBusy == False && blnBusy)
-	{
-		int x = round(dblAvgStoNNarrow);	// odd, but PI doesnt print floats properly 
-		int y = round(dblAvgStoNWide);
-		
-		blnLastBusy = True;
-		LastBusyOn = Now;
-#ifdef __ARM_ARCH
-		WriteDebugLog(LOGDEBUG, "[BusyDetect2: BUSY ON  StoN Narrow = %d StoN Wide %d", x, y);
-#else
-		WriteDebugLog(LOGDEBUG, "[BusyDetect2: BUSY ON  StoN Narrow = %f StoN Wide %f", dblAvgStoNNarrow, dblAvgStoNWide);
-#endif
-	}
-	else if (blnLastBusy == True && !blnBusy)
-	{
-		int x = round(dblAvgStoNNarrow);	// odd, but PI doesnt print floats properly 
-		int y = round(dblAvgStoNWide);
-
-		blnLastBusy = False;
-		LastBusyOff = Now;
-#ifdef __ARM_ARCH
-		WriteDebugLog(LOGDEBUG, "[BusyDetect2: BUSY OFF StoN Narrow = %d StoN Wide %d", x, y);
-#else
-		WriteDebugLog(LOGDEBUG, "[BusyDetect2: BUSY OFF StoN Narrow = %f StoN Wide %f", dblAvgStoNNarrow, dblAvgStoNWide);
-#endif
-	}
-
-	return blnLastBusy;
-}
+	// Start and Stop are in Hz. Convert to bin numbers
 
 
-*/
-
-
-
-
-BOOL BusyDetect3(float * dblMag, int intStart, int intStop)        // this only called while searching for leader ...once leader detected, no longer called.
-{
-	// each bin is about 12000/1024 or 11.72 Hz
-	// this only called while searching for leader ...once leader detected, no longer called.
-	// First sort signals and look at highes signals:baseline ratio..
+	float BinSize = 12000.0 / FFTSize;
+	int StartBin = StartFreq / BinSize;
+	int EndBin = EndFreq / BinSize;
 
 	float dblAVGSignalPerBinNarrow, dblAVGSignalPerBinWide, dblAVGBaselineNarrow, dblAVGBaselineWide;
 	float dblSlowAlpha = 0.2f;
 	float dblAvgStoNNarrow = 0, dblAvgStoNWide = 0;
-	int intNarrow = 8;  // 8 x 11.72 Hz about 94 z
-	int intWide = ((intStop - intStart) * 2) / 3; //* 0.66);
+	int intNarrow = 100 / BinSize;  // 8 x 11.72 Hz about 94 z
+	int intWide = ((EndBin - StartBin) * 2) / 3; //* 0.66);
 	int blnBusy = FALSE;
 	int  BusyDet4th = BusyDet * BusyDet * BusyDet * BusyDet;
 
@@ -202,32 +74,32 @@ BOOL BusyDetect3(float * dblMag, int intStart, int intStop)        // this only 
 	// First sort signals and look at highest signals:baseline ratio..
 	// First narrow band (~94Hz)
 
-	SortSignals2(dblMag, intStart, intStop, intNarrow, &dblAVGSignalPerBinNarrow, &dblAVGBaselineNarrow);
+	SortSignals2(dblMag, StartBin, EndBin, intNarrow, &dblAVGSignalPerBinNarrow, &dblAVGBaselineNarrow);
 
-	if (intLastStart == intStart && intLastStop == intStop)
+	if (intLastStart == StartBin && intLastStop == EndBin)
 		dblAvgStoNNarrow = (1 - dblSlowAlpha) * dblAvgStoNNarrow + dblSlowAlpha * dblAVGSignalPerBinNarrow / dblAVGBaselineNarrow;
 	else
 	{
 		// This initializes the Narrow average after a bandwidth change
 
 		dblAvgStoNNarrow = dblAVGSignalPerBinNarrow / dblAVGBaselineNarrow;
- 		intLastStart = intStart;
-		intLastStop = intStop;
+ 		intLastStart = StartBin;
+		intLastStop = EndBin;
 	}
 	
 	// Wide band (66% of current bandwidth)
 	
-	SortSignals2(dblMag, intStart, intStop, intWide, &dblAVGSignalPerBinWide, &dblAVGBaselineWide);
+	SortSignals2(dblMag, StartBin, EndBin, intWide, &dblAVGSignalPerBinWide, &dblAVGBaselineWide);
 
-	if (intLastStart == intStart && intLastStop == intStop)
+	if (intLastStart == StartBin && intLastStop == EndBin)
 		dblAvgStoNWide = (1 - dblSlowAlpha) * dblAvgStoNWide + dblSlowAlpha * dblAVGSignalPerBinWide / dblAVGBaselineWide;
 	else
 	{
 		// This initializes the Wide average after a bandwidth change
 		
 		dblAvgStoNWide = dblAVGSignalPerBinWide / dblAVGBaselineWide;
-		intLastStart = intStart;
-		intLastStop = intStop;
+		intLastStart = StartBin;
+		intLastStop = EndBin;
 	}
 
 	// Preliminary calibration...future a function of bandwidth and BusyDet.

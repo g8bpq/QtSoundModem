@@ -18,6 +18,7 @@ along with QtSoundModem.  If not, see http://www.gnu.org/licenses
 
 */
 
+
 // UZ7HO Soundmodem Port by John Wiseman G8BPQ
 
 #include <QMessageBox>
@@ -27,15 +28,26 @@ along with QtSoundModem.  If not, see http://www.gnu.org/licenses
 
 #define CONNECT(sndr, sig, rcvr, slt) connect(sndr, SIGNAL(sig), rcvr, SLOT(slt))
 
+QList<QTcpSocket*>  _MgmtSockets;
 QList<QTcpSocket*>  _KISSSockets;
 QList<QTcpSocket*>  _AGWSockets;
 
 QTcpServer * _KISSserver;
 QTcpServer * _AGWserver;
+QTcpServer * SixPackServer;
+QTcpSocket *SixPackSocket;
+QTcpServer * _MgmtServer;
+
+TMgmtMode ** MgmtConnections = NULL;
+int MgmtConCount = 0;
 
 extern workerThread *t;
 extern mynet m1;
+extern serialThread *serial;
 
+QString Response;
+
+extern int MgmtPort;
 extern "C" int KISSPort;
 extern "C" void * initPulse();
 extern "C" int SoundMode;
@@ -43,6 +55,10 @@ extern "C" int SoundMode;
 extern "C" int UDPClientPort;
 extern "C" int UDPServerPort;
 extern "C" int TXPort;
+
+extern char SixPackDevice[256];
+extern int SixPackPort;
+extern int SixPackEnable;
 
 char UDPHost[64] = "";
 
@@ -68,8 +84,9 @@ extern "C"
 	void MainLoop();
 	void set_speed(int snd_ch, int Modem);
 	void init_speed(int snd_ch);
-
 }
+
+void Process6PackData(unsigned char * Bytes, int Len);
 
 extern "C" int nonGUIMode;
 
@@ -121,12 +138,56 @@ void mynet::start()
 		}
 	}
 
+
+	if (MgmtPort)
+	{
+		_MgmtServer = new(QTcpServer);
+
+		if (_MgmtServer->listen(QHostAddress::Any, MgmtPort))
+			connect(_MgmtServer, SIGNAL(newConnection()), this, SLOT(onMgmtConnection()));
+		else
+		{
+			if (nonGUIMode)
+				Debugprintf("Listen failed for Mgmt Port");
+			else
+			{
+				QMessageBox msgBox;
+				msgBox.setText("Listen failed for Mgmt Port.");
+				msgBox.exec();
+			}
+		}
+	}
+
+
 	QObject::connect(t, SIGNAL(sendtoKISS(void *, unsigned char *, int)), this, SLOT(sendtoKISS(void *, unsigned char *, int)), Qt::QueuedConnection);
 
 
 	QTimer *timer = new QTimer(this);
 	connect(timer, SIGNAL(timeout()), this, SLOT(MyTimerSlot()));
 	timer->start(100);
+
+	if (SixPackEnable)
+	{
+		if (SixPackDevice[0] && strcmp(SixPackDevice, "None") != 0)	// Using serial
+		{
+			serial->startSlave(SixPackDevice, 30000, Response);
+			serial->start();
+
+//			connect(serial, &serialThread::request, this, &QtSoundModem::showRequest);
+//			connect(serial, &serialThread::error, this, &QtSoundModem::processError);
+//			connect(serial, &serialThread::timeout, this, &QtSoundModem::processTimeout);
+
+		}
+
+		else if (SixPackPort)		// using TCP
+		{
+			SixPackServer = new(QTcpServer);
+			if (SixPackServer->listen(QHostAddress::Any, SixPackPort))
+				connect(SixPackServer, SIGNAL(newConnection()), this, SLOT(on6PackConnection()));
+
+		}
+	}
+
 }
 
 void mynet::MyTimerSlot()
@@ -172,6 +233,32 @@ void mynet::onAGWReadyRead()
 	AGW_explode_frame(sender, datas.data(), datas.length());
 }
 
+void mynet::on6PackReadyRead()
+{
+	QTcpSocket* sender = static_cast<QTcpSocket*>(QObject::sender());
+	QByteArray datas = sender->readAll();
+	Process6PackData((unsigned char *)datas.data(), datas.length());
+}
+
+
+void mynet::on6PackSocketStateChanged(QAbstractSocket::SocketState socketState)
+{
+	if (socketState == QAbstractSocket::UnconnectedState)
+	{
+		QTcpSocket* sender = static_cast<QTcpSocket*>(QObject::sender());
+
+	}
+}
+
+void mynet::on6PackConnection()
+{
+	QTcpSocket *clientSocket = SixPackServer->nextPendingConnection();
+	connect(clientSocket, SIGNAL(readyRead()), this, SLOT(on6PackReadyRead()));
+	connect(clientSocket, SIGNAL(stateChanged(QAbstractSocket::SocketState)), this, SLOT(on6PackSocketStateChanged(QAbstractSocket::SocketState)));
+
+	Debugprintf("6Pack Connect Sock %x", clientSocket);
+}
+
 
 void mynet::onKISSConnection()
 {
@@ -186,6 +273,183 @@ void mynet::onKISSConnection()
 	Debugprintf("KISS Connect Sock %x", clientSocket);
 }
 
+void Mgmt_del_socket(void * socket)
+{
+	int i;
+
+	TMgmtMode * MGMT = NULL;
+
+	if (MgmtConCount == 0)
+		return;
+
+	for (i = 0; i < MgmtConCount; i++)
+	{
+		if (MgmtConnections[i]->Socket == socket)
+		{
+			MGMT = MgmtConnections[i];
+			break;
+		}
+	}
+
+	if (MGMT == NULL)
+		return;
+
+	// Need to remove entry and move others down
+
+	MgmtConCount--;
+
+	while (i < MgmtConCount)
+	{
+		MgmtConnections[i] = MgmtConnections[i + 1];
+		i++;
+	}
+}
+
+
+
+void mynet::onMgmtConnection()
+{
+	QTcpSocket *clientSocket = (QTcpSocket *)_MgmtServer->nextPendingConnection();
+	connect(clientSocket, SIGNAL(readyRead()), this, SLOT(onMgmtReadyRead()));
+	connect(clientSocket, SIGNAL(stateChanged(QAbstractSocket::SocketState)), this, SLOT(onMgmtSocketStateChanged(QAbstractSocket::SocketState)));
+
+	_MgmtSockets.append(clientSocket);
+
+	// Create a data structure to hold session info
+
+	TMgmtMode * MGMT;
+
+	MgmtConnections = (TMgmtMode **)realloc(MgmtConnections, (MgmtConCount + 1) * sizeof(void *));
+
+	MGMT = MgmtConnections[MgmtConCount++] = (TMgmtMode *)malloc(sizeof(*MGMT));
+	memset(MGMT, 0, sizeof(*MGMT));
+
+	MGMT->Socket = clientSocket;
+
+	Debugprintf("Mgmt Connect Sock %x", clientSocket);
+	clientSocket->write("Connected to QtSM\r");
+}
+
+
+void mynet::onMgmtSocketStateChanged(QAbstractSocket::SocketState socketState)
+{
+	if (socketState == QAbstractSocket::UnconnectedState)
+	{
+		QTcpSocket* sender = static_cast<QTcpSocket*>(QObject::sender());
+
+		Mgmt_del_socket(sender);
+
+//		free(sender->Msg);
+		_MgmtSockets.removeOne(sender);
+		Debugprintf("Mgmt Disconnect Sock %x", sender);
+	}
+}
+
+void mynet::onMgmtReadyRead()
+{
+	QTcpSocket* sender = static_cast<QTcpSocket*>(QObject::sender());
+
+	MgmtProcessLine(sender);
+}
+
+extern "C" void SendMgmtPTT(int snd_ch, int PTTState)
+{
+	// Won't work in non=gui mode
+
+	emit m1.mgmtSetPTT(snd_ch, PTTState);
+}
+
+
+extern "C" char * strlop(char * buf, char delim);
+extern "C" char modes_name[modes_count][21];
+extern "C" int speed[5];
+
+#ifndef WIN32
+extern "C" int memicmp(char *a, char *b, int n);
+#endif
+
+void mynet::MgmtProcessLine(QTcpSocket* socket)
+{
+	// Find Session
+
+	TMgmtMode * MGMT = NULL;
+
+	for (int i = 0; i < MgmtConCount; i++)
+	{
+		if (MgmtConnections[i]->Socket == socket)
+		{
+			MGMT = MgmtConnections[i];
+			break;
+		}
+	}
+
+	if (MGMT == NULL)
+	{
+		socket->readAll();
+		return;
+	}
+
+	while (socket->bytesAvailable())
+	{
+
+		QByteArray datas = socket->peek(512);
+
+		char * Line = datas.data();
+
+		if (strchr(Line, '\r') == 0)
+			return;
+
+		char * rest = strlop(Line, '\r');
+
+		int used = rest - Line;
+
+		// Read the upto the cr Null
+
+		datas = socket->read(used);
+
+		Line = datas.data();
+		rest = strlop(Line, '\r');
+
+		if (memicmp(Line, "QtSMPort ", 8) == 0)
+		{
+			if (strlen(Line) > 10)
+			{
+				int port = atoi(&Line[8]);
+				int bpqport = atoi(&Line[10]);
+
+				if ((port > 0 && port < 5) && (bpqport > 0 && bpqport < 64))
+				{
+					MGMT->BPQPort[port - 1] = bpqport;
+					socket->write("Ok\r");
+				}
+			}
+		}
+
+		else if (memicmp(Line, "Modem ", 6) == 0)
+		{
+			int port = atoi(&Line[6]);
+
+			if (port > 0 && port < 5)
+			{
+				// if any more params - if a name follows, set it else return it
+
+				char reply[80];
+
+				sprintf(reply, "Port %d Chan %d Freq %d Modem %s \r", MGMT->BPQPort[port - 1], port, rx_freq[port - 1], modes_name[speed[port - 1]]);
+
+				socket->write(reply);
+			}
+			else
+				socket->write("Invalid Port\r");
+		}
+		else
+		{
+			socket->write("Invalid command\r");
+
+		}
+	}
+}
+
 void mynet::onKISSSocketStateChanged(QAbstractSocket::SocketState socketState)
 {
 	if (socketState == QAbstractSocket::UnconnectedState)
@@ -195,6 +459,7 @@ void mynet::onKISSSocketStateChanged(QAbstractSocket::SocketState socketState)
 		KISS_del_socket(sender);
 
 		_KISSSockets.removeOne(sender);
+		Debugprintf("KISS Disconnect Sock %x", sender);
 	}
 }
 
@@ -235,7 +500,7 @@ void mynet::sendtoKISS(void * sock, unsigned char * Msg, int Len)
 		QTcpSocket* socket = (QTcpSocket*)sock;
 		socket->write((char *)Msg, Len);
 	}
-//	free(Msg);
+	free(Msg);
 }
 
 
@@ -514,6 +779,36 @@ void mynet::doHLSetPTT(int c)
 
 }
 
+void mynet::domgmtSetPTT(int snd_ch, int PTTState)
+{
+	char Msg[64];
+	uint64_t ret;
+
+	for (QTcpSocket* socket : _MgmtSockets)
+	{
+		// Find Session
+
+		TMgmtMode * MGMT = NULL;
+
+		for (int i = 0; i < MgmtConCount; i++)
+		{
+			if (MgmtConnections[i]->Socket == socket)
+			{
+				MGMT = MgmtConnections[i];
+				break;
+			}
+		}
+
+		if (MGMT == NULL)
+			continue;
+
+		if (MGMT->BPQPort[snd_ch])
+		{
+			sprintf(Msg, "PTT %d %s\r", MGMT->BPQPort[snd_ch], PTTState ? "ON" : "OFF");
+			ret = socket->write(Msg);
+		}
+	}
+}
 
 
 

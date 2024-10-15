@@ -1025,6 +1025,34 @@ void sendCWID(char * strID, BOOL CWOnOff, int Chan)
 		initFilter(200, Filter, Chan);
 
 
+	// if sending 1500 cal tone send mark tone for 10 secs
+
+	if (strcmp(strID, "1500TONE") == 0)
+	{
+		float m_amplitude = 30000.0f;
+		float m_frequency = 1500.0f;
+		float m_phase = 0.0;
+		float m_time = 0.0;
+		float m_deltaTime = 1.0f / 12000;
+
+		float x;
+		// generate sin wave in mono
+		for (int sample = 0; sample < 120000; ++sample)
+		{
+			x = m_amplitude * sin(2 * M_PI * m_frequency * m_time + m_phase);
+			ARDOPSampleSink(x);
+			m_time += m_deltaTime;
+		}
+
+
+		ARDOPTXPtr[Chan] = 0;
+		ARDOPTXLen[Chan] = Number;
+		Number = 0;
+
+		return;
+
+	}
+
 	//Generate leader for VOX 6 dots long
 
 	for (k = 6; k >0; k--)

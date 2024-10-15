@@ -44,6 +44,11 @@ void printtick(char * msg);
 void PollReceivedSamples();
 short * SoundInit();
 void StdinPollReceivedSamples();
+extern void WriteDebugLog(char * Mess);
+extern void UDPPollReceivedSamples();
+extern void QSleep(int ms);
+extern void ProcessNewSamples(short * Samples, int nSamples);
+extern void sendSamplestoStdout(short * Samples, int nSamples);
 
 #include <math.h>
 
@@ -57,7 +62,7 @@ void GetSoundDevices();
 #define MaxReceiveSize 2048		// Enough for 9600
 #define MaxSendSize 4096
 
-short buffer[2][MaxSendSize * 2];		// Two Transfer/DMA buffers of 0.1 Sec  (x2 for Stereo)
+short buffer[4][MaxSendSize * 2];		// Two Transfer/DMA buffers of 0.1 Sec  (x2 for Stereo)
 short inbuffer[5][MaxReceiveSize * 2];	// Input Transfer/ buffers of 0.1 Sec (x2 for Stereo)
 
 extern short * DMABuffer;
@@ -102,10 +107,12 @@ WAVEFORMATEX wfx = { WAVE_FORMAT_PCM, 2, 12000, 48000, 4, 16, 0 };
 HWAVEOUT hWaveOut = 0;
 HWAVEIN hWaveIn = 0;
 
-WAVEHDR header[2] =
+WAVEHDR header[4] =
 {
 	{(char *)buffer[0], 0, 0, 0, 0, 0, 0, 0},
-	{(char *)buffer[1], 0, 0, 0, 0, 0, 0, 0}
+	{(char *)buffer[1], 0, 0, 0, 0, 0, 0, 0},
+	{(char *)buffer[2], 0, 0, 0, 0, 0, 0, 0},
+	{(char *)buffer[3], 0, 0, 0, 0, 0, 0, 0}
 };
 
 WAVEHDR inheader[5] =
@@ -155,12 +162,6 @@ VOID __cdecl Debugprintf(const char * format, ...)
 
 void platformInit()
 {
-	TIMECAPS tc;
-	unsigned int     wTimerRes;
-	DWORD	t, lastt = 0;
-	int i = 0;
-
-
 	_strupr(CaptureDevice);
 	_strupr(PlaybackDevice);
 
@@ -224,20 +225,20 @@ FILE * wavfp1;
 
 BOOL DMARunning = FALSE;		// Used to start DMA on first write
 
-BOOL SeeIfCardBusy()
-{
-	if ((header[!Index].dwFlags & WHDR_DONE))
-		return 0;
-
-	return 1;
-}
-
 extern void sendSamplestoUDP(short * Samples, int nSamples, int Port);
 
 extern int UDPClientPort;
 
 short * SendtoCard(unsigned short * buf, int n)
 {
+	int NextBuffer = Index;
+	char Msg[80];
+
+	NextBuffer++;
+
+	if (NextBuffer > 3)
+		NextBuffer = 0;
+
 	if (SoundMode == 3)			// UDP
 	{
 		sendSamplestoUDP(buf, n, UDPClientPort);
@@ -256,15 +257,17 @@ short * SendtoCard(unsigned short * buf, int n)
 	waveOutPrepareHeader(hWaveOut, &header[Index], sizeof(WAVEHDR));
 	waveOutWrite(hWaveOut, &header[Index], sizeof(WAVEHDR));
 
-	// wait till previous buffer is complete
+	// wait till next buffer is free
 
-	while (!(header[!Index].dwFlags & WHDR_DONE))
+	while (!(header[NextBuffer].dwFlags & WHDR_DONE))
 	{
 		txSleep(5);				// Run buckground while waiting 
 	}
 
-	waveOutUnprepareHeader(hWaveOut, &header[!Index], sizeof(WAVEHDR));
-	Index = !Index;
+	waveOutUnprepareHeader(hWaveOut, &header[NextBuffer], sizeof(WAVEHDR));
+	Index = NextBuffer;
+
+	sprintf(Msg, "TX Buffer %d", NextBuffer);
 
 	return &buffer[Index][0];
 }
@@ -365,7 +368,7 @@ int onlyMixSnoop = 0;
 
 int InitSound(BOOL Report)
 {
-	int i, t, ret;
+	int i, ret;
 
 	if (SoundMode == 4)
 	{
@@ -400,6 +403,8 @@ int InitSound(BOOL Report)
 
 	header[0].dwFlags = WHDR_DONE;
 	header[1].dwFlags = WHDR_DONE;
+	header[2].dwFlags = WHDR_DONE;
+	header[3].dwFlags = WHDR_DONE;
 
 	if (strlen(PlaybackDevice) <= 2)
 		PlayBackIndex = atoi(PlaybackDevice);
@@ -723,10 +728,14 @@ void SoundFlush()
 	SendtoCard(buffer[Index], Number);
 
 	//	Wait for all sound output to complete
-	
+
 	while (!(header[0].dwFlags & WHDR_DONE))
 		txSleep(10);
 	while (!(header[1].dwFlags & WHDR_DONE))
+		txSleep(10);
+	while (!(header[2].dwFlags & WHDR_DONE))
+		txSleep(10);
+	while (!(header[3].dwFlags & WHDR_DONE))
 		txSleep(10);
 
 	// I think we should turn round the link here. I dont see the point in
@@ -922,6 +931,7 @@ BOOL WriteCOMBlock(HANDLE fd, char * Block, int BytesToWrite)
 	if ((!fWriteStat) || (BytesToWrite != BytesWritten))
 	{
 		int Err = GetLastError();
+		Debugprintf("Serial Write Error %d", Err);
 		ClearCommError(fd, &ErrorFlags, &ComStat);
 		return FALSE;
 	}

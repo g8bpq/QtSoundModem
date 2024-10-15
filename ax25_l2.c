@@ -28,6 +28,16 @@ extern int RSID_SetModem[4];
 extern int needRSID[4];
 extern int needRSID[4];
 
+BOOL useKISSControls = 0;
+
+#define FEND 0xc0
+#define FESC 0xDB
+#define TFEND 0xDC
+#define TFESC 0xDD
+#define KISS_ACKMODE 0x0C
+#define KISS_DATA 0
+#define QTSMKISSCMD 7
+
 
 /*
 
@@ -60,6 +70,23 @@ string * make_frame(string * data, Byte * path, Byte  pid, Byte nr, Byte ns, Byt
 void rst_t3(TAX25Port * AX25Sess);
 
 TAX25Port * get_user_port(int snd_ch, Byte * path);
+void analiz_frame(int snd_ch, string * frame, char * code, boolean fecflag);
+boolean is_last_digi(Byte *path);
+int is_excluded_call(int snd_ch, unsigned char * path);
+boolean is_correct_path(Byte * path, Byte pid);
+void KISS_on_data_out(int port, string * frame, int TX);
+void ax25_info_init(TAX25Port * AX25Sess);
+void  clr_frm_win(TAX25Port * AX25Sess);
+void decode_frame(Byte * frame, int len, Byte * path, string * data,
+	Byte * pid, Byte * nr, Byte * ns, Byte * f_type, Byte * f_id,
+	Byte *  rpt, Byte * pf, Byte * cr);
+void ax25_info_init(TAX25Port * AX25Sess);
+void AGW_AX25_disc(TAX25Port * AX25Sess, Byte mode);
+void AGW_AX25_conn(TAX25Port * AX25Sess, int snd_ch, Byte mode);
+int number_digi(char * path);
+void AGW_AX25_data_in(void  * socket, int snd_ch, int PID, Byte * path, string * data);
+
+
 
 void  inc_frack(TAX25Port * AX25Sess)
 {
@@ -1100,7 +1127,8 @@ void on_FRMR(void * socket, TAX25Port * AX25Sess, Byte * path)
 	{
 		AX25Sess->info.stat_end_ses = time(NULL);
 
-		AGW_AX25_disc(socket, AX25Sess->snd_ch, MODE_OTHER, path);
+		AGW_AX25_disc(AX25Sess, MODE_OTHER);
+
 		write_ax25_info(AX25Sess);
 	}
 
@@ -1408,14 +1436,18 @@ void analiz_frame(int snd_ch, string * frame, char * code, boolean fecflag)
 	if (len < PKT_ERR)
 		return;
 
+	bytes[snd_ch] += frame->Length;			// For AGW stats
+
+	if (AGWServ)
+		AGW_AX25_frame_analiz(snd_ch, TRUE, frame);
+
 	decode_frame(frame->Data, frame->Length, path, data, &pid, &nr, &ns, &f_type, &f_id, &rpt, &pf, &cr);
 
 	if (is_excluded_call(snd_ch, path))
-		excluded =TRUE;
+		excluded = TRUE;
 
 	// if is_excluded_frm(snd_ch,f_id,data) then excluded:=TRUE;
 	
-
 	if (excluded)
 		return;
 
@@ -1448,7 +1480,20 @@ void analiz_frame(int snd_ch, string * frame, char * code, boolean fecflag)
 			AGW_Raw_monitor(snd_ch, frame);
 
 		if (KISSServ)
+		{
+			if (useKISSControls)
+			{
+				// Send a KISS Control frame with frame stats before data frame
+
+				int len = strlen(code);
+				UCHAR * Control = (UCHAR *)malloc(64);
+
+				len = sprintf(Control, "%c%cPKTINFO [%s]%c", FEND, (snd_ch) << 4 | QTSMKISSCMD, code, FEND);
+
+				KISSSendtoServer(NULL, Control, len);
+			}
 			KISS_on_data_out(snd_ch, frame, 0);
+		}
 	}
 
 	// Digipeat frame
@@ -1618,9 +1663,6 @@ void analiz_frame(int snd_ch, string * frame, char * code, boolean fecflag)
 		on_FRMR(socket, AX25Sess, path);
 		break;
 	}
-	
-	if (AGWServ)
-		AGW_AX25_frame_analiz(snd_ch, TRUE, frame);
 }
 
 

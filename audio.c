@@ -40,6 +40,7 @@
 #endif
 
 void Debugprintf(const char * format, ...);
+void Sleep(int mS);
 
 extern int Closing;
 

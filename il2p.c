@@ -88,7 +88,7 @@ void Debugprintf(const char * format, ...);
 int SMUpdatePhaseConstellation(int chan, float * Phases, float * Mags, int intPSKPhase, int Count);
 
 extern int openTraceLog();
-extern uint64_t writeTraceLog(char * Data, char Dirn);
+extern uint64_t writeTraceLog(char * Data);
 extern void closeTraceLog();
 
 #define MAX_ADEVS 3			
@@ -4839,7 +4839,7 @@ void debugHexDump(unsigned char * Data, int Len, char Dirn)
 			Line[Len * 3] = 10;
 			Line[Len * 3 + 1] = 0;
 		}
-		writeTraceLog(Line, Dirn);
+		writeTraceLog(Line);
 
 		Data += 16;
 		Len -= 16;

@@ -71,6 +71,7 @@ QTextEdit * monWindowCopy;
 extern workerThread *t;
 extern QtSoundModem * w;
 extern QCoreApplication * a;
+extern serialThread *serial;
 
 QList<QSerialPortInfo> Ports = QSerialPortInfo::availablePorts();
 
@@ -95,7 +96,7 @@ extern "C" char CaptureNames[16][256];
 extern "C" char PlaybackNames[16][256];
 
 extern "C" int SoundMode;
-extern "C" int onlyMixSnoop;
+extern "C" bool onlyMixSnoop;
 
 extern "C" int multiCore;
 
@@ -117,6 +118,8 @@ extern "C" int ReceiveSize;
 extern "C" int SendSize;		// 100 mS for now
 
 extern "C" int txLatency;
+
+extern "C" int BusyDet;
 
 extern "C"
 { 
@@ -169,6 +172,8 @@ int Configuring = 0;
 bool lockWaterfall = false;
 bool inWaterfall = false;
 
+int MgmtPort = 0;
+
 extern "C" int NeedWaterfallHeaders;
 extern "C" float BinSize;
 
@@ -192,6 +197,7 @@ QRgb rxText = qRgb(0, 0, 192);
 
 bool darkTheme = true;
 bool minimizeonStart = true;
+extern "C" bool useKISSControls;
 
 // Indexed colour list from ARDOPC
 
@@ -241,6 +247,21 @@ int MintoTray = 1;
 
 int RSID_WF = 0;				// Set to use RSID FFT for Waterfall. 
 
+char SixPackDevice[256] = "";
+int SixPackPort = 0;
+int SixPackEnable = 0;
+
+// Stats
+
+uint64_t PTTonTime[4] = { 0 };
+uint64_t PTTActivemS[4] = { 0 };			// For Stats
+uint64_t BusyonTime[4] = { 0 };
+uint64_t BusyActivemS[4] = { 0 };
+
+int AvPTT[4] = { 0 };
+int AvBusy[4] = { 0 };
+
+
 extern "C" void WriteDebugLog(char * Mess)
 {
 	qDebug() << Mess;
@@ -249,6 +270,24 @@ extern "C" void WriteDebugLog(char * Mess)
 void QtSoundModem::doupdateDCD(int Chan, int State)
 {
 	DCDLabel[Chan]->setVisible(State);
+
+	// This also tries to get a percentage on time over a minute
+
+	uint64_t Time = QDateTime::currentMSecsSinceEpoch();
+
+	if (State)
+	{
+		BusyonTime[Chan] = Time;
+		return;
+	}
+
+	if (BusyonTime[Chan])
+	{
+		BusyActivemS[Chan] += Time - BusyonTime[Chan];
+		BusyonTime[Chan] = 0;
+	}
+
+
 }
 
 extern "C" char * frame_monitor(string * frame, char * code, bool tx_stat);
@@ -529,6 +568,8 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 
 	getSettings();
 
+	serial = new serialThread;
+
 	QSettings mysettings("QtSoundModem.ini", QSettings::IniFormat);
 
 	family = mysettings.value("FontFamily", "Courier New").toString();
@@ -790,6 +831,10 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 	connect(timer, SIGNAL(timeout()), this, SLOT(MyTimerSlot()));
 	timer->start(100);
 
+	QTimer *statstimer = new QTimer(this);
+	connect(statstimer, SIGNAL(timeout()), this, SLOT(StatsTimer()));
+	statstimer->start(60000);		// One Minute
+
 	wftimer = new QTimer(this);
 	connect(wftimer, SIGNAL(timeout()), this, SLOT(doRestartWF()));
 //	wftimer->start(1000 * 300);
@@ -811,6 +856,9 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 //	il2p_init(1);
 
 	QTimer::singleShot(200, this, &QtSoundModem::updateFont);
+
+	connect(serial, &serialThread::request, this, &QtSoundModem::showRequest);
+
 
 }
 
@@ -875,7 +923,113 @@ void extSetOffset(int chan)
 
 	return;
 }
+
+extern TMgmtMode ** MgmtConnections;
+extern int MgmtConCount;
+extern QList<QTcpSocket*>  _MgmtSockets;
+extern "C" void doAGW2MinTimer();
+
+#define FEND 0xc0
+#define QTSMKISSCMD 7
+
+int AGW2MinTimer = 0;
+
+void QtSoundModem::StatsTimer()
+{
+	// Calculate % Busy over last minute
+
+	for (int n = 0; n < 4; n++)
+	{
+		if (soundChannel[n] == 0)	// Channel not used
+			continue;
+		
+		AvPTT[n] = PTTActivemS[n] / 600;		// ms but  want %
+
+		PTTActivemS[n] = 0;
+
+		AvBusy[n] = BusyActivemS[n] / 600;
+		BusyActivemS[n] = 0;
 	
+	
+	// send to any connected Mgmt streams
+
+		char Msg[64];
+		uint64_t ret;
+
+		if (!useKISSControls)
+		{
+
+			for (QTcpSocket* socket : _MgmtSockets)
+			{
+				// Find Session
+
+				TMgmtMode * MGMT = NULL;
+
+				for (int i = 0; i < MgmtConCount; i++)
+				{
+					if (MgmtConnections[i]->Socket == socket)
+					{
+						MGMT = MgmtConnections[i];
+						break;
+					}
+				}
+
+				if (MGMT == NULL)
+					continue;
+
+				if (MGMT->BPQPort[n])
+				{
+					sprintf(Msg, "STATS %d %d %d\r", MGMT->BPQPort[n], AvPTT[n], AvBusy[n]);
+					ret = socket->write(Msg);
+				}
+			}
+		}
+		else			// useKISSControls set
+		{
+			UCHAR * Control = (UCHAR *)malloc(32);
+
+			int len = sprintf((char *)Control, "%c%cSTATS %d %d%c", FEND, (n) << 4 | QTSMKISSCMD, AvPTT[n], AvBusy[n], FEND);
+			KISSSendtoServer(NULL, Control, len);
+		}
+	}
+
+	AGW2MinTimer++;
+
+	if (AGW2MinTimer > 1)
+	{
+		AGW2MinTimer = 0;
+		doAGW2MinTimer();
+	}
+}
+
+// PTT Stats
+
+extern "C" void UpdatePTTStats(int Chan, int State)
+{
+	uint64_t Time = QDateTime::currentMSecsSinceEpoch();
+
+	if (State)
+	{
+		PTTonTime[Chan] = Time;
+
+		// Cancel Busy timer (stats include ptt on time in port active
+
+		if (BusyonTime[Chan])
+		{
+			BusyActivemS[Chan] += (Time - BusyonTime[Chan]);
+			BusyonTime[Chan] = 0;
+		}
+	}
+	else
+	{
+		if (PTTonTime[Chan])
+		{
+			PTTActivemS[Chan] += (Time - PTTonTime[Chan]);
+			PTTonTime[Chan] = 0;
+		}
+	}
+}
+
 void QtSoundModem::MyTimerSlot()
 {
 	// 100 mS Timer Event
@@ -1083,6 +1237,8 @@ void QtSoundModem::clickedSlotI(int i)
 	if (strcmp(Name, "DCDSlider") == 0)
 	{
 		dcd_threshold = i;
+		BusyDet = i / 10;		// for ardop busy detect code
+
 		saveSettings();
 		return;
 	}
@@ -1263,6 +1419,16 @@ void QtSoundModem::clickedSlot()
 		handleButton(3, 0);
 		return;
 	}
+
+	if (strcmp(Name, "Cal1500") == 0)
+	{
+		char call[] = "1500TONE";
+		sendCWID(call, 0, 0);
+		calib_mode[0] = 4;
+		return;
+	}
+
+
 
 	if (strcmp(Name, "actFont") == 0)
 	{
@@ -2009,6 +2175,7 @@ bool myResize::eventFilter(QObject *obj, QEvent *event)
 void QtSoundModem::doDevices()
 {
 	char valChar[10];
+	QStringList items;
 
 	Dev = new(Ui_devicesDialog);
 
@@ -2024,6 +2191,22 @@ void QtSoundModem::doDevices()
 	myResize *resize = new myResize();
 
 	UI.installEventFilter(resize);
+
+	// Set serial names
+
+	for (const QSerialPortInfo &info : Ports)
+	{
+		items.append(info.portName());
+	}
+
+	items.sort();
+
+	Dev->SixPackSerial->addItem("None");
+
+	for (const QString &info : items)
+	{
+		Dev->SixPackSerial->addItem(info);
+	}
 
 	newSoundMode = SoundMode;
 	oldSoundMode = SoundMode;
@@ -2100,6 +2283,7 @@ void QtSoundModem::doDevices()
 	QStandardItem * item = model->item(0, 0);
 	item->setEnabled(false);
 
+	Dev->useKISSControls->setChecked(useKISSControls);
 	Dev->singleChannelOutput->setChecked(SCO);
 	Dev->colourWaterfall->setChecked(raduga);
 
@@ -2110,6 +2294,26 @@ void QtSoundModem::doDevices()
 	sprintf(valChar, "%d", AGWPort);
 	Dev->AGWPort->setText(valChar);
 	Dev->AGWEnabled->setChecked(AGWServ);
+
+	Dev->MgmtPort->setText(QString::number(MgmtPort));
+
+	// If we are using a user specifed device add it
+
+	i = Dev->SixPackSerial->findText(SixPackDevice, Qt::MatchFixedString);
+
+	if (i == -1)
+	{
+		// Add our device to list
+
+		Dev->SixPackSerial->insertItem(0, SixPackDevice);
+		i = Dev->SixPackSerial->findText(SixPackDevice, Qt::MatchContains);
+	}
+
+	Dev->SixPackSerial->setCurrentIndex(i);
+
+	sprintf(valChar, "%d", SixPackPort);
+	Dev->SixPackTCP->setText(valChar);
+	Dev->SixPackEnable->setChecked(SixPackEnable);
 
 	Dev->PTTOn->setText(PTTOnString);
 	Dev->PTTOff->setText(PTTOffString);
@@ -2137,8 +2341,6 @@ void QtSoundModem::doDevices()
 
 	Dev->VIDPID->setText(CM108Addr);
 
-	QStringList items;
-
 	connect(Dev->CAT, SIGNAL(toggled(bool)), this, SLOT(CATChanged(bool)));
 	connect(Dev->DualPTT, SIGNAL(toggled(bool)), this, SLOT(DualPTTChanged(bool)));
 	connect(Dev->PTTPort, SIGNAL(currentIndexChanged(int)), this, SLOT(PTTPortChanged(int)));
@@ -2147,13 +2349,6 @@ void QtSoundModem::doDevices()
 		Dev->CAT->setChecked(true);
 	else
 		Dev->RTSDTR->setChecked(true);
-
-	for (const QSerialPortInfo &info : Ports)
-	{
-		items.append(info.portName());
-	}
-
-	items.sort();
 
 	Dev->PTTPort->addItem("None");
 	Dev->PTTPort->addItem("CM108");
@@ -2342,6 +2537,8 @@ void QtSoundModem::deviceaccept()
 	if (UsingLeft && UsingRight)
 		UsingBothChannels = 1;
 
+
+	useKISSControls = Dev->useKISSControls->isChecked();
 	SCO = Dev->singleChannelOutput->isChecked();
 	raduga = Dev->colourWaterfall->isChecked();
 	AGWServ = Dev->AGWEnabled->isChecked();
@@ -2353,9 +2550,26 @@ void QtSoundModem::deviceaccept()
 	Q = Dev->AGWPort->text();
 	AGWPort = Q.toInt();
 
+	Q = Dev->MgmtPort->text();
+	MgmtPort = Q.toInt();
+
+	Q = Dev->SixPackSerial->currentText();
+
+	char temp[256];
+
+	strcpy(temp, Q.toString().toUtf8());
+
+	if (strlen(temp))
+		strcpy(SixPackDevice, temp);
+
+	Q = Dev->SixPackTCP->text();
+	SixPackPort = Q.toInt();
+
+	SixPackEnable = Dev->SixPackEnable->isChecked();
+
+
 	Q = Dev->PTTPort->currentText();
 	
-	char temp[256];
 
 	strcpy(temp, Q.toString().toUtf8());
 
@@ -2588,6 +2802,7 @@ void QtSoundModem::doCalibrate()
 		connect(Calibrate.High_D, SIGNAL(released()), this, SLOT(clickedSlot()));
 		connect(Calibrate.Both_D, SIGNAL(released()), this, SLOT(clickedSlot()));
 		connect(Calibrate.Stop_D, SIGNAL(released()), this, SLOT(clickedSlot()));
+		connect(Calibrate.Cal1500, SIGNAL(released()), this, SLOT(clickedSlot()));
 
 		/*
 		
@@ -3502,7 +3717,7 @@ extern "C" int openTraceLog()
 	return 1;
 }
 
-extern "C" qint64 writeTraceLog(char * Data, char Dirn)
+extern "C" qint64 writeTraceLog(char * Data)
 {
 	return tracefile.write(Data);
 }
@@ -3534,7 +3749,7 @@ extern "C" void debugTimeStamp(char * Text, char Dirn)
 	char Msg[2048];
 
 	sprintf(Msg, "%s %s\n", String.toUtf8().data(), Text);
-	qint64 ret = writeTraceLog(Msg, Dirn);
+	writeTraceLog(Msg);
 }
 
 
@@ -3599,3 +3814,76 @@ void QtSoundModem::StartWatchdog()
  }
 
 
+ // KISS Serial Port code - mainly for 6Pack but should work with KISS as well
+
+ // Serial Read needs to block and signal the main thread whenever a character is received. TX can probably be uncontrolled
+
+ void serialThread::startSlave(const QString &portName, int waitTimeout, const QString &response)
+ {
+	 QMutexLocker locker(&mutex);
+	 this->portName = portName;
+	 this->waitTimeout = waitTimeout;
+	 this->response = response;
+	 if (!isRunning())
+		 start();
+ }
+
+ void serialThread::run()
+ {
+	 QSerialPort serial;
+	 bool currentPortNameChanged = false;
+
+	 mutex.lock();
+	 QString currentPortName;
+	 if (currentPortName != portName) {
+		 currentPortName = portName;
+		 currentPortNameChanged = true;
+	 }
+
+	 int currentWaitTimeout = waitTimeout;
+	 QString currentRespone = response;
+	 mutex.unlock();
+
+	 if (currentPortName.isEmpty())
+	 {
+		 Debugprintf("Port not set");
+		 return;
+	 }
+
+	 serial.setPortName(currentPortName);
+
+	 if (!serial.open(QIODevice::ReadWrite))
+	 {
+		 Debugprintf("Can't open %s, error code %d", portName, serial.error());
+		 return;
+	 }
+ 
+	 while (1)
+	 {
+		
+		 if (serial.waitForReadyRead(currentWaitTimeout))
+		 {
+			 // read request
+			 QByteArray requestData = serial.readAll();
+			 while (serial.waitForReadyRead(10))
+				 requestData += serial.readAll();
+
+			 // Pass data to 6pack handler
+
+			 emit this->request(requestData);
+
+		 }
+		 else {
+			 Debugprintf("Serial read request timeout");
+		 }
+	 }
+ }
+
+ void Process6PackData(unsigned char * Bytes, int Len);
+
+ void QtSoundModem::showRequest(QByteArray Data)
+ {
+	 Process6PackData((unsigned char *)Data.data(), Data.length());
+ }
+
+ 

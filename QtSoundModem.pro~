@@ -44,8 +44,8 @@ SOURCES += ./audio.c \
     ./ofdm.c \
     ./pktARDOP.c \
      ./BusyDetect.c \
-	 ./DW9600.c \
-	./6pack.cpp
+	 ./DW9600.c
+
 
 
 FORMS += ./calibrateDialog.ui \

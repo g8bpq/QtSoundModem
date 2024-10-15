@@ -4,8 +4,8 @@
 //	 My port of UZ7HO's Soundmodem
 //
 
-#define VersionString "0.0.0.72"
-#define VersionBytes {0, 0, 0, 72}
+#define VersionString "0.0.0.73"
+#define VersionBytes {0, 0, 0, 73}
 
 //#define LOGTX
 //#define LOGRX
@@ -181,7 +181,7 @@
 //		Improve reliability of waterfall update
 //		Report and set fx.25 and il2p flags to/from BPQ
 
-// .72	Fix IL2P for RUH modems
+// .72	Fix IL2P for RUH modems						// July 2024
 //		Fix crash when closing in non-gui mode
 //		Fix loop in chk_dcd1
 //		Change method of timing PTT
@@ -191,6 +191,11 @@
 // Beta 14 Add display of mix/snoop devices
 
 //		Change phase map of QPSK3600 mode to match Nino TNC
+
+//.73	Fix QPSK3600 RX Filters
+//		Add Mgmt Interface (Beta 2)
+//		Use ARDOP Busy detector (Beta 3)
+//		Various fixes to AGW interface (Beta 4)
 
 
 
@@ -316,6 +321,15 @@ typedef struct TKISSMode_t
 	TStringList buffer[4];			// Outgoing Frames
 
 } TKISSMode;
+
+typedef struct MgmtMode_t
+{
+	void * Socket;				// Used as a key
+	char Msg[512];			// Received message 
+	int Len;
+	int BPQPort[4];			// BPQ port for each modem
+
+} TMgmtMode;
 
 typedef struct  TMChannel_t
 {
@@ -461,7 +475,7 @@ typedef struct AGWUser_t
 {
 	void *socket;
 	string * data_in;
-	TStringList AGW_frame_buf;
+//	TStringList AGW_frame_buf;
 	boolean	Monitor;
 	boolean	Monitor_raw;
 	boolean reportFreqAndModem;			// Can report modem and frequency to host
@@ -534,6 +548,7 @@ typedef struct TAX25Port_t
 #define PTTCM108	8
 #define PTTHAMLIB	16
 #define PTTFLRIG	32
+#define PTTHOST		128				// May be combined with others
 
 // Status flags
 
@@ -677,9 +692,9 @@ extern int SendSize;
 #define MODEM_Q2400_BPF_TAP 256 //256
 #define MODEM_Q2400_LPF_TAP 128  //128
  //
-#define MODEM_Q3600_BPF 1800
-#define MODEM_Q3600_TXBPF 2000
-#define MODEM_Q3600_LPF 600
+#define MODEM_Q3600_BPF 3600
+#define MODEM_Q3600_TXBPF 3000
+#define MODEM_Q3600_LPF 1350
 #define MODEM_Q3600_BPF_TAP 256
 #define MODEM_Q3600_LPF_TAP 128
  //
@@ -1010,6 +1025,9 @@ extern int redtime[4];
 extern int IPOLL[4];
 extern int maxframe[4];
 extern int TXFrmMode[4];
+
+extern int bytes[4];
+extern int bytes2mins[4];
 
 extern char MyDigiCall[4][512];
 extern char exclude_callsigns[4][512];

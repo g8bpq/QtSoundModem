@@ -1789,32 +1789,6 @@ int gpioInitialise(void)
 
 
 
-int stricmp(const unsigned char * pStr1, const unsigned char *pStr2)
-{
-    unsigned char c1, c2;
-    int  v;
-
-	if (pStr1 == NULL)
-	{
-		if (pStr2)
-			Debugprintf("stricmp called with NULL 1st param - 2nd %s ", pStr2);
-		else
-			Debugprintf("stricmp called with two NULL params");
-
-		return 1;
-	}
-
-
-    do {
-        c1 = *pStr1++;
-        c2 = *pStr2++;
-        /* The casts are necessary when pStr1 is shorter & char is signed */
-        v = tolower(c1) - tolower(c2);
-    } while ((v == 0) && (c1 != '\0') && (c2 != '\0') );
-
-    return v;
-}
-
 char Leds[8]= {0};
 unsigned int PKTLEDTimer = 0;
 
@@ -2106,6 +2080,64 @@ int gethints()
 	snd_device_name_free_hint(hints);
 	return 0;
 }
+
+// Microsoft routines not available in gcc
+
+int memicmp(unsigned char *a, unsigned char *b, int n)
+{
+	if (n)
+	{
+		while (n && (toupper(*a) == toupper(*b)))
+			n--, a++, b++;
+
+		if (n)
+			return toupper(*a) - toupper(*b);
+	}
+	return 0;
+}
+int stricmp(const unsigned char * pStr1, const unsigned char *pStr2)
+{
+	unsigned char c1, c2;
+	int  v;
+
+	if (pStr1 == NULL)
+	{
+		if (pStr2)
+			Debugprintf("stricmp called with NULL 1st param - 2nd %s ", pStr2);
+		else
+			Debugprintf("stricmp called with two NULL params");
+
+		return 1;
+	}
+
+
+	do {
+		c1 = *pStr1++;
+		c2 = *pStr2++;
+		/* The casts are necessary when pStr1 is shorter & char is signed */
+		v = tolower(c1) - tolower(c2);
+	} while ((v == 0) && (c1 != '\0') && (c2 != '\0'));
+
+	return v;
+}
+char * strupr(char* s)
+{
+	char* p = s;
+
+	if (s == 0)
+		return 0;
+
+	while (*p = toupper(*p)) p++;
+	return s;
+}
+
+char * strlwr(char* s)
+{
+	char* p = s;
+	while (*p = tolower(*p)) p++;
+	return s;
+}
+
 
 
 

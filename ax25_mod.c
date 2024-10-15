@@ -25,6 +25,17 @@ along with QtSoundModem.  If not, see http://www.gnu.org/licenses
 
 // I assume this modulates (and sends?} frames
 
+void InitBuffers();
+void EncodeRS(Byte * xData, Byte * xEncoded);
+void scrambler(UCHAR * in_buf, int Len);
+void fx25_encode_rs(Byte * data, Byte *parity, int pad, int rs_size);
+int fx25_decode_rs(Byte * data, int * eras_pos, int no_eras, int pad, int rs_size);
+int il2p_get_new_bit_tail(UCHAR snd_ch, UCHAR bit);
+int il2p_get_new_bit(int snd_ch, Byte bit);
+int ARDOPSendToCard(int Chan, int Len);
+void Flush();
+void SampleSink(int LR, short Sample);
+
 int RSEncode(UCHAR * bytToRS, UCHAR * RSBytes, int DataLen, int RSLen);
 
 //unit ax25_mod;

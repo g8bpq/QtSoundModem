@@ -22,6 +22,8 @@ along with QtSoundModem.  If not, see http://www.gnu.org/licenses
 
 #include "UZ7HOStuff.h"
 
+int add_raw_frames(int snd_ch, string * frame, TStringList * buf);
+
 // I think I need a struct for each connection, but a simple array of entries should be fine
 // My normal ** and count system
 // Each needs an input buffer of max size kiss frame and length (or maybe string is a good idea)
@@ -35,6 +37,7 @@ int KISSConCount = 0;
 #define TFESC 0xDD
 #define KISS_ACKMODE 0x0C
 #define KISS_DATA 0
+#define QTSMKISSCMD 7
 
 struct TKISSMode_t  KISS;
 
@@ -75,7 +78,7 @@ end;
 
 void KISS_add_stream(void * Socket)
 {
-	// Add a new connection. Called wheKISSn QT accepts an incoming call}
+	// Add a new connection. Called when QT accepts an incoming call}
 
 	TKISSMode * KISS;
 

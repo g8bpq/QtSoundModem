@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>535</width>
-    <height>698</height>
+    <width>528</width>
+    <height>721</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -20,9 +20,9 @@
    <property name="geometry">
     <rect>
      <x>5</x>
-     <y>10</y>
-     <width>512</width>
-     <height>671</height>
+     <y>0</y>
+     <width>513</width>
+     <height>711</height>
     </rect>
    </property>
    <property name="verticalScrollBarPolicy">
@@ -40,7 +40,7 @@
       <x>0</x>
       <y>0</y>
       <width>508</width>
-      <height>668</height>
+      <height>706</height>
      </rect>
     </property>
     <widget class="QGroupBox" name="groupBox">
@@ -49,7 +49,7 @@
        <x>5</x>
        <y>10</y>
        <width>541</width>
-       <height>331</height>
+       <height>361</height>
       </rect>
      </property>
      <property name="title">
@@ -582,14 +582,27 @@
        <string>Only Mix/Snoop Devices (needs custom .asoundrc)</string>
       </property>
      </widget>
+     <widget class="QCheckBox" name="useKISSControls">
+      <property name="geometry">
+       <rect>
+        <x>20</x>
+        <y>328</y>
+        <width>271</width>
+        <height>17</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Enable KISS Control and Reporting</string>
+      </property>
+     </widget>
     </widget>
-    <widget class="QGroupBox" name="groupBox_2">
+    <widget class="QGroupBox" name="Goup">
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>360</y>
+       <y>380</y>
        <width>481</width>
-       <height>101</height>
+       <height>133</height>
       </rect>
      </property>
      <property name="title">
@@ -600,7 +613,7 @@
        <rect>
         <x>22</x>
         <y>24</y>
-        <width>121</width>
+        <width>129</width>
         <height>18</height>
        </rect>
       </property>
@@ -633,7 +646,7 @@
        <rect>
         <x>22</x>
         <y>48</y>
-        <width>111</width>
+        <width>131</width>
         <height>18</height>
        </rect>
       </property>
@@ -718,7 +731,7 @@
        <rect>
         <x>20</x>
         <y>74</y>
-        <width>111</width>
+        <width>135</width>
         <height>18</height>
        </rect>
       </property>
@@ -726,12 +739,97 @@
        <string>UDP Sound Server Host</string>
       </property>
      </widget>
+     <widget class="QComboBox" name="SixPackSerial">
+      <property name="geometry">
+       <rect>
+        <x>160</x>
+        <y>100</y>
+        <width>81</width>
+        <height>20</height>
+       </rect>
+      </property>
+      <property name="editable">
+       <bool>true</bool>
+      </property>
+     </widget>
+     <widget class="QLabel" name="label_17">
+      <property name="geometry">
+       <rect>
+        <x>20</x>
+        <y>98</y>
+        <width>111</width>
+        <height>18</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>6Pack Serial Port</string>
+      </property>
+     </widget>
+     <widget class="QLineEdit" name="SixPackTCP">
+      <property name="geometry">
+       <rect>
+        <x>320</x>
+        <y>100</y>
+        <width>47</width>
+        <height>20</height>
+       </rect>
+      </property>
+     </widget>
+     <widget class="QLabel" name="label_7">
+      <property name="geometry">
+       <rect>
+        <x>252</x>
+        <y>101</y>
+        <width>63</width>
+        <height>18</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>TCP Port</string>
+      </property>
+     </widget>
+     <widget class="QCheckBox" name="SixPackEnable">
+      <property name="geometry">
+       <rect>
+        <x>380</x>
+        <y>99</y>
+        <width>70</width>
+        <height>23</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Enabled</string>
+      </property>
+     </widget>
+     <widget class="QLineEdit" name="MgmtPort">
+      <property name="geometry">
+       <rect>
+        <x>410</x>
+        <y>25</y>
+        <width>47</width>
+        <height>20</height>
+       </rect>
+      </property>
+     </widget>
+     <widget class="QLabel" name="label_18">
+      <property name="geometry">
+       <rect>
+        <x>340</x>
+        <y>25</y>
+        <width>91</width>
+        <height>20</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Mgmt Port</string>
+      </property>
+     </widget>
     </widget>
     <widget class="QGroupBox" name="groupBox_3">
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>470</y>
+       <y>520</y>
        <width>481</width>
        <height>151</height>
       </rect>
@@ -933,8 +1031,8 @@
     <widget class="QWidget" name="layoutWidget">
      <property name="geometry">
       <rect>
-       <x>140</x>
-       <y>626</y>
+       <x>130</x>
+       <y>670</y>
        <width>215</width>
        <height>33</height>
       </rect>

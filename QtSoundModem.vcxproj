@@ -382,6 +382,7 @@
     </QtUic>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="6pack.cpp" />
     <ClCompile Include="ARDOPC.c" />
     <ClCompile Include="berlekamp.c" />
     <ClCompile Include="BusyDetect.c" />

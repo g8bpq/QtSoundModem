@@ -27,6 +27,14 @@ extern word MEMRecovery[5];
 
 void  make_rx_frame_FX25(int snd_ch, int rcvr_nr, int emph, string * data);
 string * memory_ARQ(TStringList * buf, string * data);
+void CreateStringList(TStringList * List);
+void analiz_frame(int snd_ch, string * frame, char * code, boolean fecflag);
+void KISS_on_data_out(int port, string * frame, int TX);
+void updateDCD(int Chan, boolean State);
+void Frame_Optimize(TAX25Port * AX25Sess, TStringList * buf);
+void RX2TX(int snd_ch);
+int fx25_decode_rs(Byte * data, int * eras_pos, int no_eras, int pad, int rs_size);
+void il2p_rec_bit(int chan, int subchan, int slice, int dbit);
 
 float GuessCentreFreq(int i);
 void ProcessRXFrames(int snd_ch);
@@ -374,6 +382,7 @@ void chk_dcd1(int snd_ch, int buf_size)
 
 	if (lastDCDState[snd_ch] != dcd_bit_sync[snd_ch])
 	{
+		updateDCD(snd_ch, dcd_bit_sync[snd_ch]);
 		updateDCD(snd_ch, dcd_bit_sync[snd_ch]);
 		lastDCDState[snd_ch] = dcd_bit_sync[snd_ch];
 	}
@@ -4258,7 +4267,7 @@ void ProcessRXFrames(int snd_ch)
 
 	// Work out which decoder and which emph settings worked. 
 
-	if (snd_ch < 0 || snd_ch >3)
+	if (snd_ch < 0 || snd_ch > 3)
 		return;
 
 	if (detect_list[snd_ch].Count > 0)		// no point if nothing decoded

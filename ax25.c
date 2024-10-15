@@ -29,9 +29,19 @@ __declspec(dllimport) unsigned short __stdcall ntohs(__in unsigned short hostsho
 
 #else
 
+#include <stdint.h>
+
+uint32_t htonl(uint32_t hostlong);
+uint16_t htons(uint16_t hostshort);
+uint32_t ntohl(uint32_t netlong);
+uint16_t ntohs(uint16_t netshort);
+
 #define strtok_s strtok_r
 #include <stddef.h>
 #endif 
+
+void set_DM(int snd_ch, Byte * path);
+void  rst_values(TAX25Port * AX25Sess);
 
 void decode_frame(Byte * frame, int len, Byte * path, string * data,
 	Byte * pid, Byte * nr, Byte * ns, Byte * f_type, Byte * f_id,
@@ -243,6 +253,9 @@ int IPOLL[4] = { 30,30,30,30 };
 int maxframe[4] = { 0,0,0,0 };
 int TXFrmMode[4] = { 0,0,0,0 };
 int max_frame_collector[4] = { 0,0,0,0 };
+
+int bytes[4] = { 0,0,0,0 };
+int bytes2mins[4] = { 0,0,0,0 };
 
 char MyDigiCall[4][512] = { "","","","" };
 char exclude_callsigns[4][512] = { "","","","" };
@@ -1729,7 +1742,7 @@ int  is_excluded_frm(int snd_ch, int f_id, string * data)
 
 
 
-int number_digi(string path)
+int number_digi(char * path)
 {
 	int n = 0;
 

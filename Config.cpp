@@ -29,7 +29,7 @@ extern "C" void get_exclude_list(char * line, TStringList * list);
 extern "C" void get_exclude_frm(char * line, TStringList * list);
 
 extern "C" int SoundMode; 
-extern "C" int onlyMixSnoop;
+extern "C" bool onlyMixSnoop;
 
 //extern "C" int RX_SR;
 //extern "C" int TX_SR;
@@ -59,6 +59,7 @@ extern int CWIDRight;
 extern int CWIDType;
 extern bool afterTraffic;
 extern bool darkTheme;
+extern "C" bool useKISSControls;
 
 extern "C" int RSID_SABM[4];
 extern "C" int RSID_UI[4];
@@ -66,8 +67,10 @@ extern "C" int RSID_SetModem[4];
 
 extern "C" int nonGUIMode;
 
-
-
+extern char SixPackDevice[256];
+extern int SixPackPort;
+extern int SixPackEnable;
+extern int MgmtPort;
 extern QFont Font;
 
 
@@ -216,6 +219,7 @@ void getSettings()
 	soundChannel[3] = settings->value("Modem/soundChannel4", 0).toInt();
 
 	SCO = settings->value("Init/SCO", 0).toInt();
+	useKISSControls = settings->value("Init/useKISSControls", 0).toBool();
 
 	dcd_threshold = settings->value("Modem/DCDThreshold", 40).toInt();
 	rxOffset = settings->value("Modem/rxOffset", 0).toInt();
@@ -224,6 +228,11 @@ void getSettings()
 	AGWPort = settings->value("AGWHost/Port", 8000).toInt();
 	KISSServ = settings->value("KISS/Server", FALSE).toBool();
 	KISSPort = settings->value("KISS/Port", 8105).toInt();
+	MgmtPort = settings->value("MGMT/Port", 0).toInt();
+
+	SixPackEnable = settings->value("SixPack/Enable", FALSE).toBool();
+	SixPackPort = settings->value("SixPack/Port", 0).toInt();
+	strcpy(SixPackDevice, settings->value("SixPack/Device", "").toString().toUtf8());
 
 //	RX_Samplerate = RX_SR + RX_SR * 0.000001*RX_PPM;
 //	TX_Samplerate = TX_SR + TX_SR * 0.000001*TX_PPM;
@@ -402,6 +411,7 @@ void saveSettings()
 	settings->setValue("Init/SndRXDeviceName", CaptureDevice);
 	settings->setValue("Init/SndTXDeviceName", PlaybackDevice);
 
+	settings->setValue("Init/useKISSControls", useKISSControls);
 	settings->setValue("Init/SCO", SCO);
 	settings->setValue("Init/DualPTT", DualPTT);
 	settings->setValue("Init/TXRotate", TX_rotate);
@@ -460,6 +470,12 @@ void saveSettings()
 	settings->setValue("AGWHost/Port", AGWPort);
 	settings->setValue("KISS/Server", KISSServ);
 	settings->setValue("KISS/Port", KISSPort);
+	settings->setValue("MGMT/Port", MgmtPort);
+
+
+	settings->setValue("SixPack/Enable", SixPackEnable);
+	settings->setValue("SixPack/Port", SixPackPort);
+	settings->setValue("SixPack/Device", SixPackDevice);
 
 	settings->setValue("Modem/PreEmphasisAll1", emph_all[0]);
 	settings->setValue("Modem/PreEmphasisAll2", emph_all[1]);

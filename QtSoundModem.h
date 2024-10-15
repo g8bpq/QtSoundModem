@@ -43,6 +43,7 @@ private slots:
 	void updateFont();
 	void MinimizetoTray();
 	void TrayActivated(QSystemTrayIcon::ActivationReason reason);
+	void StatsTimer();
 	void MyTimerSlot();
 	void returnPressed();
 	void clickedSlotI(int i);
@@ -77,6 +78,7 @@ private slots:
 	void StartWatchdog();
 	void StopWatchdog();
 	void PTTWatchdogExpired();
+	void showRequest(QByteArray Data);
 	void clickedSlot();
 	void startCWIDTimerSlot();
 	void setWaterfallImage();
@@ -123,4 +125,26 @@ protected:
 #define WaterfallHeaderPixels 38
 #define WaterfallTotalPixels WaterfallDisplayPixels + WaterfallHeaderPixels
 #define WaterfallImageHeight (WaterfallTotalPixels + WaterfallTotalPixels)
+
+
+class serialThread : public QThread
+{
+	Q_OBJECT
+
+public:
+	void run() Q_DECL_OVERRIDE;
+	void startSlave(const QString &portName, int waitTimeout, const QString &response);
+
+signals:
+	void request(const QByteArray &s);
+	void error(const QString &s);
+	void timeout(const QString &s);
+
+private:
+	QString portName;
+	QString response;
+	int waitTimeout;
+	QMutex mutex;
+	bool quit;
+};
 

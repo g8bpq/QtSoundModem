@@ -33,15 +33,18 @@ extern void saveSettings();
 extern int Closing;
 
 workerThread *t;
+serialThread *serial;
 mynet m1;
 
 QCoreApplication * a;		
 
 QtSoundModem * w;
 
+
 int main(int argc, char *argv[])
 {
 	char Title[128];
+	QString Response;
 
 	if (argc > 1 && strcmp(argv[1], "nogui") == 0)
 		nonGUIMode = 1;
@@ -78,6 +81,7 @@ int main(int argc, char *argv[])
 
 	QObject::connect(&m1, SIGNAL(HLSetPTT(int)), &m1, SLOT(doHLSetPTT(int)), Qt::QueuedConnection);
 	QObject::connect(&m1, SIGNAL(FLRigSetPTT(int)), &m1, SLOT(doFLRigSetPTT(int)), Qt::QueuedConnection);
+	QObject::connect(&m1, SIGNAL(mgmtSetPTT(int, int)), &m1, SLOT(domgmtSetPTT(int, int)), Qt::QueuedConnection);
 
 
 	QObject::connect(&m1, SIGNAL(startTimer(int)), &m1, SLOT(dostartTimer(int)), Qt::QueuedConnection);
