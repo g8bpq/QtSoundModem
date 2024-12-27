@@ -224,7 +224,7 @@ void SampleSink(int LR, short Sample)
 	{
 		// Need to upsample to 48K. Try just duplicating sample
 
-		uint32_t * ptr = &DMABuffer[2 * Number];
+		uint16_t * ptr = &DMABuffer[2 * Number];
 
 		*(&ptr[1]) = *(ptr);
 		*(&ptr[2]) = *(ptr);
@@ -388,7 +388,7 @@ extern UCHAR * pixelPointer;
 #endif
 
 extern int blnBusyStatus;
-BusyDet = 5;
+int BusyDet = 5;
 
 #define PLOTWATERFALL
 
@@ -521,6 +521,12 @@ void SMUpdateBusyDetector(int LR, float * Real, float *Imag)
 
 		Low = tx_freq[chan] - txbpf[chan] / 2;
 		High = tx_freq[chan] + txbpf[chan] / 2;
+
+		if (Low < 100)
+			continue;
+
+		if (High > 3300)
+			continue;
 
 //		Low = tx_freq[chan] - 0.5*rx_shift[chan];
 //		High = tx_freq[chan] + 0.5*rx_shift[chan];

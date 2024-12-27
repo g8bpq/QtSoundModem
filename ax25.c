@@ -1758,7 +1758,7 @@ int number_digi(char * path)
 
 
 
-get_monitor_path(Byte * path, char * mycall, char * corrcall, char * digi)
+void get_monitor_path(Byte * path, char * mycall, char * corrcall, char * digi)
 {
 	Byte * digiptr = digi;
 

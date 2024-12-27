@@ -497,7 +497,7 @@ void chk_dcd1(int snd_ch, int buf_size)
 					for (int k = 0; k < KISS.buffer[snd_ch].Count; k++)
 					{
 						if (AGWServ)
-							AGW_Raw_monitor(snd_ch, Strings(&KISS.buffer[snd_ch], n));
+							AGW_Raw_monitor(snd_ch, Strings(&KISS.buffer[snd_ch], k));
 
 						// Need to add copy as clear will free original
 

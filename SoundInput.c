@@ -32,7 +32,7 @@ extern unsigned int PKTLEDTimer;
 //#define min(x, y) ((x) < (y) ? (x) : (y))
 
 void SendFrametoHost(unsigned char *data, unsigned dlen);
-
+void ProcessPktFrame(int snd_ch, UCHAR * Data, int frameLen);
 void CheckandAdjustRXLevel(int maxlevel, int minlevel, BOOL Force);
 void mySetPixel(unsigned char x, unsigned char y, unsigned int Colour);
 void clearDisplay();

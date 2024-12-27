@@ -226,7 +226,6 @@ void FREE_RS(struct rs *rs);
 // Maybe these should be in a different file, separated from the internal stuff.
 
 void fx25_init(int debug_level);
-int fx25_send_frame(int chan, unsigned char *fbuf, int flen, int fx_mode);
 void fx25_rec_bit(int chan, int subchan, int slice, int dbit);
 int fx25_rec_busy(int chan);
 
@@ -398,7 +397,8 @@ typedef enum cmdres_e { cr_00 = 2, cr_cmd = 1, cr_res = 0, cr_11 = 3 } cmdres_t;
 extern packet_t ax25_new(void);
 
 
-#ifdef AX25_PAD_C	/* Keep this hidden - implementation could change. */
+int set_addrs(packet_t pp, char addrs[AX25_MAX_ADDRS][AX25_MAX_ADDR_LEN], int num_addr, cmdres_t cr);
+
 
 
 /*
@@ -440,8 +440,6 @@ static inline int ax25_get_num_control(packet_t this_p)
 
 	return (1);					/* U   xxxx xx11 */
 }
-
-
 
 /*
  * APRS always has one protocol octet of 0xF0 meaning no level 3
@@ -514,7 +512,7 @@ static inline int ax25_get_num_info(packet_t this_p)
 	return (len);
 }
 
-#endif
+
 
 
 typedef enum ax25_modulo_e { modulo_unknown = 0, modulo_8 = 8, modulo_128 = 128 } ax25_modulo_t;
@@ -1445,79 +1443,6 @@ int ax25_get_ssid(packet_t this_p, int n)
 		return (0);
 	}
 }
-
-
-
-static inline int ax25_get_pid_offset(packet_t this_p)
-{
-	return (ax25_get_control_offset(this_p) + ax25_get_num_control(this_p));
-}
-
-static int ax25_get_num_pid(packet_t this_p)
-{
-	int c;
-	int pid;
-
-	c = this_p->frame_data[ax25_get_control_offset(this_p)];
-
-	if ((c & 0x01) == 0 ||				/* I   xxxx xxx0 */
-		c == 0x03 || c == 0x13) {			/* UI  000x 0011 */
-
-		pid = this_p->frame_data[ax25_get_pid_offset(this_p)];
-		if (pid == AX25_PID_ESCAPE_CHARACTER) {
-			return (2);			/* pid 1111 1111 means another follows. */
-		}
-		return (1);
-	}
-	return (0);
-}
-
-
-inline int ax25_get_control_offset(packet_t this_p)
-{
-	return (this_p->num_addr * 7);
-}
-
-inline int ax25_get_num_control(packet_t this_p)
-{
-	int c;
-
-	c = this_p->frame_data[ax25_get_control_offset(this_p)];
-
-	if ((c & 0x01) == 0) {			/* I   xxxx xxx0 */
-		return ((this_p->modulo == 128) ? 2 : 1);
-	}
-
-	if ((c & 0x03) == 1) {			/* S   xxxx xx01 */
-		return ((this_p->modulo == 128) ? 2 : 1);
-	}
-
-	return (1);					/* U   xxxx xx11 */
-}
-
-
-
-
-int ax25_get_info_offset(packet_t this_p)
-{
-	int offset = ax25_get_control_offset(this_p) + ax25_get_num_control(this_p) + ax25_get_num_pid(this_p);
-	return (offset);
-}
-
-int ax25_get_num_info(packet_t this_p)
-{
-	int len;
-
-	/* assuming AX.25 frame. */
-
-	len = this_p->frame_len - this_p->num_addr * 7 - ax25_get_num_control(this_p) - ax25_get_num_pid(this_p);
-	if (len < 0) {
-		len = 0;		/* print error? */
-	}
-
-	return (len);
-}
-
 
 
 

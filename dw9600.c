@@ -21,6 +21,8 @@ typedef struct TStringList_T
 } TStringList;
 
 #include <stddef.h>
+#include <ctype.h>
+#include <stdlib.h>
 #include "dw9600.h"
 
 #define stringAdd(s1, s2, c) mystringAdd(s1, s2, c, __FILE__, __LINE__)
@@ -48,8 +50,13 @@ extern short tx_bitrate[5];
 extern unsigned short * DMABuffer;
 extern int SampleNo;
 
-
+string * il2p_send_frame(int chan, packet_t pp, int max_fec, int polarity);
+int fx25_send_frame(int chan, unsigned char *fbuf, int flen, int fx_mode);
+int multi_modem_process_rec_frame(int chan, int subchan, int slice, unsigned char *fbuf, int flen, int alevel, int retries, int is_fx25);
 void ProcessRXFrames(int snd_ch);
+unsigned short get_fcs(unsigned char * Data, unsigned short len);
+void il2p_rec_bit(int chan, int subchan, int slice, int dbit);
+void Debugprintf(const char * format, ...);
 
 //
 //    This file is part of Dire Wolf, an amateur radio packet TNC.
@@ -171,9 +178,7 @@ static int composite_dcd[MAX_CHANS][MAX_SUBCHANS + 1];
 
 int was_init[4] = { 0, 0, 0, 0 };
 
-struct audio_s *g_audio_p;
 extern struct audio_s pa[4];
-
 
 void hdlc_rec_init(struct audio_s *pa)
 {
@@ -184,7 +189,7 @@ void hdlc_rec_init(struct audio_s *pa)
 	//dw_printf ("hdlc_rec_init (%p) \n", pa);
 
 	assert(pa != NULL);
-	g_audio_p = &pa;
+
 
 	memset(composite_dcd, 0, sizeof(composite_dcd));
 
@@ -336,7 +341,7 @@ static void eas_rec_bit(int chan, int subchan, int slice, int raw, int future_us
 		dw_printf("frame_buf %d = %s\n", slice, H->frame_buf);
 #endif
 		alevel_t alevel = demod_get_audio_level(chan, subchan);
-		multi_modem_process_rec_frame(chan, subchan, slice, H->frame_buf, H->frame_len, alevel, 0, 0);
+		multi_modem_process_rec_frame(chan, subchan, slice, H->frame_buf, H->frame_len, 0, 0, 0);
 		H->eas_gathering = 0;
 	}
 
@@ -1597,7 +1602,7 @@ static int try_decode(rrbb_t block, int chan, int subchan, int slice, alevel_t a
 
 			assert(rrbb_get_chan(block) == chan);
 			assert(rrbb_get_subchan(block) == subchan);
-			multi_modem_process_rec_frame(chan, subchan, slice, H2.frame_buf, H2.frame_len - 2, alevel, retry_conf.retry, 0);   /* len-2 to remove FCS. */
+			multi_modem_process_rec_frame(chan, subchan, slice, H2.frame_buf, H2.frame_len - 2, 0, retry_conf.retry, 0);   /* len-2 to remove FCS. */
 			return 1;		/* success */
 
 		}
@@ -1607,7 +1612,7 @@ static int try_decode(rrbb_t block, int chan, int subchan, int slice, alevel_t a
 				//text_color_set(DW_COLOR_ERROR);
 				//dw_printf ("ATTEMPTING PASSALL PROCESSING\n");
 
-				multi_modem_process_rec_frame(chan, subchan, slice, H2.frame_buf, H2.frame_len - 2, alevel, RETRY_MAX, 0);   /* len-2 to remove FCS. */
+				multi_modem_process_rec_frame(chan, subchan, slice, H2.frame_buf, H2.frame_len - 2, 0, RETRY_MAX, 0);   /* len-2 to remove FCS. */
 				return 1;		/* success */
 			}
 			else {
@@ -3421,40 +3426,6 @@ static int number_of_bits_sent[MAX_CHANS];	// Count number of bits sent by "hdlc
  *--------------------------------------------------------------*/
 
 static int ax25_only_hdlc_send_frame(int chan, unsigned char *fbuf, int flen, int bad_fcs);
-
-
-int layer2_send_frame(int chan, packet_t pp, int bad_fcs, struct audio_s *audio_config_p)
-{
-	if (audio_config_p->achan[chan].layer2_xmit == LAYER2_IL2P) {
-
-		int n = il2p_send_frame(chan, pp, audio_config_p->achan[chan].il2p_max_fec,
-			audio_config_p->achan[chan].il2p_invert_polarity);
-		if (n > 0) {
-			return (n);
-		}
-		text_color_set(DW_COLOR_ERROR);
-		dw_printf("Unable to send IL2p frame.  Falling back to regular AX.25.\n");
-		// Not sure if we should fall back to AX.25 or not here.
-	}
-	else if (audio_config_p->achan[chan].layer2_xmit == LAYER2_FX25) 
-	{
-		unsigned char fbuf[AX25_MAX_PACKET_LEN + 2];
-		int flen = ax25_pack(pp, fbuf);
-		int n = fx25_send_frame(chan, fbuf, flen, audio_config_p->achan[chan].fx25_strength);
-		if (n > 0) {
-			return (n);
-		}
-		text_color_set(DW_COLOR_ERROR);
-		dw_printf("Unable to send FX.25.  Falling back to regular AX.25.\n");
-		// Definitely need to fall back to AX.25 here because
-		// the FX.25 frame length is so limited.
-	}
-
-	unsigned char fbuf[AX25_MAX_PACKET_LEN + 2];
-	int flen = ax25_pack(pp, fbuf);
-	return (ax25_only_hdlc_send_frame(chan, fbuf, flen, bad_fcs));
-}
-
 
 
 static int ax25_only_hdlc_send_frame(int chan, unsigned char *fbuf, int flen, int bad_fcs)

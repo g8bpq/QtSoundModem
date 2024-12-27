@@ -4,8 +4,8 @@
 //	 My port of UZ7HO's Soundmodem
 //
 
-#define VersionString "0.0.0.73"
-#define VersionBytes {0, 0, 0, 73}
+#define VersionString "0.0.0.74 Beta 2"
+#define VersionBytes {0, 0, 0, 74}
 
 //#define LOGTX
 //#define LOGRX
@@ -197,7 +197,8 @@
 //		Use ARDOP Busy detector (Beta 3)
 //		Various fixes to AGW interface (Beta 4)
 
-
+//.74	Fix filter bandwidths		Nov 24
+//		Fixes for gcc 14			Beta 2
 
 // As far as I can see txtail is only there to make sure all bits get through the tx filter,
 // so it shouldn't really matter what is sent. Code worked in characters, so resolution of txtail
@@ -668,11 +669,11 @@ extern int SendSize;
 #define QPSK_SM 0
 #define QPSK_V26 1
 
-#define MODEM_8P4800_BPF 3200
-#define MODEM_8P4800_TXBPF 3400
+#define MODEM_8P4800_BPF 2800			// Baud 1600
+#define MODEM_8P4800_TXBPF 2800
 #define MODEM_8P4800_LPF 1000
-#define MODEM_8P4800_BPF_TAP 64
-#define MODEM_8P4800_LPF_TAP 8
+#define MODEM_8P4800_BPF_TAP 256
+#define MODEM_8P4800_LPF_TAP 128
  //
 #define MODEM_MP400_BPF 775
 #define MODEM_MP400_TXBPF 850
@@ -684,7 +685,7 @@ extern int SendSize;
 #define MODEM_DW2400_TXBPF 2500
 #define MODEM_DW2400_LPF 900
 #define MODEM_DW2400_BPF_TAP 256 //256
-#define MODEM_DW2400_LPF_TAP 32  //128
+#define MODEM_DW2400_LPF_TAP 128  //128
  //
 #define MODEM_Q2400_BPF 2400
 #define MODEM_Q2400_TXBPF 2500
@@ -692,20 +693,20 @@ extern int SendSize;
 #define MODEM_Q2400_BPF_TAP 256 //256
 #define MODEM_Q2400_LPF_TAP 128  //128
  //
-#define MODEM_Q3600_BPF 3600
-#define MODEM_Q3600_TXBPF 3000
+#define MODEM_Q3600_BPF 2800			// 1800 baud
+#define MODEM_Q3600_TXBPF 2800
 #define MODEM_Q3600_LPF 1350
 #define MODEM_Q3600_BPF_TAP 256
 #define MODEM_Q3600_LPF_TAP 128
  //
-#define MODEM_Q4800_BPF 4800
-#define MODEM_Q4800_TXBPF 5000
+#define MODEM_Q4800_BPF 2800			// 2400 baud
+#define MODEM_Q4800_TXBPF 2800
 #define MODEM_Q4800_LPF 1800
 #define MODEM_Q4800_BPF_TAP 256
 #define MODEM_Q4800_LPF_TAP 128
  //
-#define MODEM_P2400_BPF 4800
-#define MODEM_P2400_TXBPF 5000
+#define MODEM_P2400_BPF 2800			// 2400 baud
+#define MODEM_P2400_TXBPF 2800
 #define MODEM_P2400_LPF 1800
 #define MODEM_P2400_BPF_TAP 256
 #define MODEM_P2400_LPF_TAP 128
@@ -746,8 +747,8 @@ extern int SendSize;
 #define MODEM_1200_BPF_TAP 256
 #define MODEM_1200_LPF_TAP 128
  //
-#define MODEM_2400_BPF 3200
-#define MODEM_2400_TXBPF 3200
+#define MODEM_2400_BPF 2800				// 2400 baud
+#define MODEM_2400_TXBPF 2800
 #define MODEM_2400_LPF 1400
 #define MODEM_2400_BPF_TAP 256
 #define MODEM_2400_LPF_TAP 128

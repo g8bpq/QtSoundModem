@@ -30,8 +30,19 @@ void make_core_LPF(UCHAR snd_ch, short width);
 void dw9600ProcessSample(int snd_ch, short Sample);
 void init_RUH48(int snd_ch);
 void init_RUH96(int snd_ch);
+void CheckPSKWindows();
+void Demodulator(int snd_ch, int rcvr_nr, float * src_buf, int last, int xcenter);
+void sendSamplestoUDP(short * Samples, int nSamples, int Port);
+void RSIDProcessSamples(short * Samples, int nSamples);
+void ARDOPProcessNewSamples(int chan, short * Samples, int nSamples);
+void doWaterfall(int snd_ch);
+void  displayWaterfall();
+void timer_event();
+void decode_frame(Byte * frame, int len, Byte * path, string * data, Byte * pid, Byte * nr, Byte * ns, Byte * f_type, Byte * f_id, Byte *  rpt, Byte * pf, Byte * cr);
+void get_monitor_path(Byte * path, char * mycall, char * corrcall, char * digi);
+void ProcessRXFrames(int snd_ch);
 
-char modes_name[modes_count][21] = 
+char modes_name[modes_count][21] =
 {
 	"AFSK AX.25 300bd","AFSK AX.25 1200bd","AFSK AX.25 600bd","AFSK AX.25 2400bd",
 	"BPSK AX.25 1200bd","BPSK AX.25 600bd","BPSK AX.25 300bd","BPSK AX.25 2400bd",
@@ -827,10 +838,10 @@ void runModems()
 		if (thread[2]) WaitForSingleObject(&thread[2], 2000);
 		if (thread[3]) WaitForSingleObject(&thread[3], 2000);
 #else
-		if (thread[0]) pthread_join(thread[0], &res);
-		if (thread[1]) pthread_join(thread[1], &res);
-		if (thread[2]) pthread_join(thread[2], &res);
-		if (thread[3]) pthread_join(thread[3], &res);
+		if (thread[0]) pthread_join(thread[0], NULL);
+		if (thread[1]) pthread_join(thread[1], NULL);
+		if (thread[2]) pthread_join(thread[2], NULL);
+		if (thread[3]) pthread_join(thread[3], NULL);
 #endif
 	}
 }

@@ -374,7 +374,7 @@ void  delete_I_FRM(TAX25Port * AX25Sess, int  nr)
 void delete_I_FRM_port(TAX25Port * AX25Sess)
 {
 	string * frame;
-	string path = { 0 }; 
+	char path[] = ""; 
 	string data= { 0 };
 
 	Byte pid, nr, ns, f_type, f_id, rpt, cr, pf;
@@ -386,7 +386,7 @@ void delete_I_FRM_port(TAX25Port * AX25Sess)
 		optimize = TRUE;
 		frame = Strings(&AX25Sess->frame_buf, i);
 
-		decode_frame(frame->Data, frame->Length, &path, &data, &pid, &nr, &ns, &f_type, &f_id, &rpt, &pf, &cr);
+		decode_frame(frame->Data, frame->Length, &path[0], &data, &pid, &nr, &ns, &f_type, &f_id, &rpt, &pf, &cr);
 
 		if (f_id == I_I)
 		{
